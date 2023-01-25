@@ -1,0 +1,1877 @@
+{
+	"compiler": {
+		"version": "0.5.0+commit.1d4f565a"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"name": "",
+						"type": "address"
+					}
+				],
+				"name": "getValidatorID",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"name": "sealedEpoch",
+						"type": "uint256"
+					},
+					{
+						"name": "_totalSupply",
+						"type": "uint256"
+					},
+					{
+						"name": "nodeDriver",
+						"type": "address"
+					},
+					{
+						"name": "owner",
+						"type": "address"
+					}
+				],
+				"name": "initialize",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"name": "toValidatorID",
+						"type": "uint256"
+					}
+				],
+				"name": "restakeRewards",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"name": "toValidatorID",
+						"type": "uint256"
+					}
+				],
+				"name": "claimRewards",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "maxLockupDuration",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "pure",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "minLockupDuration",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "pure",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "stakeTokenizerAddress",
+				"outputs": [
+					{
+						"name": "",
+						"type": "address"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"name": "delegator",
+						"type": "address"
+					},
+					{
+						"name": "toValidatorID",
+						"type": "uint256"
+					}
+				],
+				"name": "getUnlockedStake",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "totalSupply",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"name": "delegator",
+						"type": "address"
+					},
+					{
+						"name": "toValidatorID",
+						"type": "uint256"
+					},
+					{
+						"name": "stake",
+						"type": "uint256"
+					},
+					{
+						"name": "lockedStake",
+						"type": "uint256"
+					},
+					{
+						"name": "lockupFromEpoch",
+						"type": "uint256"
+					},
+					{
+						"name": "lockupEndTime",
+						"type": "uint256"
+					},
+					{
+						"name": "lockupDuration",
+						"type": "uint256"
+					},
+					{
+						"name": "earlyUnlockPenalty",
+						"type": "uint256"
+					},
+					{
+						"name": "rewards",
+						"type": "uint256"
+					}
+				],
+				"name": "setGenesisDelegation",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"name": "toValidatorID",
+						"type": "uint256"
+					},
+					{
+						"name": "amount",
+						"type": "uint256"
+					}
+				],
+				"name": "unlockStake",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"name": "validatorID",
+						"type": "uint256"
+					},
+					{
+						"name": "status",
+						"type": "uint256"
+					}
+				],
+				"name": "deactivateValidator",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"name": "",
+						"type": "address"
+					},
+					{
+						"name": "",
+						"type": "uint256"
+					},
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"name": "getWithdrawalRequest",
+				"outputs": [
+					{
+						"name": "epoch",
+						"type": "uint256"
+					},
+					{
+						"name": "time",
+						"type": "uint256"
+					},
+					{
+						"name": "amount",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "maxDelegatedRatio",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "pure",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "contractCommission",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "pure",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "totalActiveStake",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "offlinePenaltyThreshold",
+				"outputs": [
+					{
+						"name": "blocksNum",
+						"type": "uint256"
+					},
+					{
+						"name": "time",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"name": "getEpochSnapshot",
+				"outputs": [
+					{
+						"name": "endTime",
+						"type": "uint256"
+					},
+					{
+						"name": "epochFee",
+						"type": "uint256"
+					},
+					{
+						"name": "totalBaseRewardWeight",
+						"type": "uint256"
+					},
+					{
+						"name": "totalTxRewardWeight",
+						"type": "uint256"
+					},
+					{
+						"name": "baseRewardPerSecond",
+						"type": "uint256"
+					},
+					{
+						"name": "totalStake",
+						"type": "uint256"
+					},
+					{
+						"name": "totalSupply",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"name": "toValidatorID",
+						"type": "uint256"
+					},
+					{
+						"name": "wrID",
+						"type": "uint256"
+					}
+				],
+				"name": "withdraw",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"name": "validatorID",
+						"type": "uint256"
+					},
+					{
+						"name": "refundRatio",
+						"type": "uint256"
+					}
+				],
+				"name": "updateSlashingRefundRatio",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"name": "toValidatorID",
+						"type": "uint256"
+					},
+					{
+						"name": "wrID",
+						"type": "uint256"
+					},
+					{
+						"name": "amount",
+						"type": "uint256"
+					}
+				],
+				"name": "undelegate",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"name": "auth",
+						"type": "address"
+					},
+					{
+						"name": "validatorID",
+						"type": "uint256"
+					},
+					{
+						"name": "pubkey",
+						"type": "bytes"
+					},
+					{
+						"name": "status",
+						"type": "uint256"
+					},
+					{
+						"name": "createdEpoch",
+						"type": "uint256"
+					},
+					{
+						"name": "createdTime",
+						"type": "uint256"
+					},
+					{
+						"name": "deactivatedEpoch",
+						"type": "uint256"
+					},
+					{
+						"name": "deactivatedTime",
+						"type": "uint256"
+					}
+				],
+				"name": "setGenesisValidator",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "version",
+				"outputs": [
+					{
+						"name": "",
+						"type": "bytes3"
+					}
+				],
+				"payable": false,
+				"stateMutability": "pure",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"name": "validatorID",
+						"type": "uint256"
+					}
+				],
+				"name": "getSelfStake",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"name": "epoch",
+						"type": "uint256"
+					},
+					{
+						"name": "validatorID",
+						"type": "uint256"
+					}
+				],
+				"name": "getEpochReceivedStake",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "unlockedRewardRatio",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "pure",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "totalSlashedStake",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"name": "delegator",
+						"type": "address"
+					},
+					{
+						"name": "toValidatorID",
+						"type": "uint256"
+					}
+				],
+				"name": "pendingRewards",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"name": "epoch",
+						"type": "uint256"
+					},
+					{
+						"name": "validatorID",
+						"type": "uint256"
+					}
+				],
+				"name": "getEpochAccumulatedRewardPerToken",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "withdrawalPeriodEpochs",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "pure",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"name": "delegator",
+						"type": "address"
+					},
+					{
+						"name": "toValidatorID",
+						"type": "uint256"
+					}
+				],
+				"name": "getLockedStake",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"name": "delegator",
+						"type": "address"
+					},
+					{
+						"name": "validatorID",
+						"type": "uint256"
+					}
+				],
+				"name": "rewardsStash",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [],
+				"name": "renounceOwnership",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "currentEpoch",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "currentSealedEpoch",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"name": "getValidatorPubkey",
+				"outputs": [
+					{
+						"name": "",
+						"type": "bytes"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "totalStake",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"name": "blocksNum",
+						"type": "uint256"
+					},
+					{
+						"name": "time",
+						"type": "uint256"
+					}
+				],
+				"name": "updateOfflinePenaltyThreshold",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"name": "delegator",
+						"type": "address"
+					},
+					{
+						"name": "toValidatorID",
+						"type": "uint256"
+					}
+				],
+				"name": "stashRewards",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "owner",
+				"outputs": [
+					{
+						"name": "",
+						"type": "address"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "isOwner",
+				"outputs": [
+					{
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"name": "",
+						"type": "address"
+					},
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"name": "getLockupInfo",
+				"outputs": [
+					{
+						"name": "lockedStake",
+						"type": "uint256"
+					},
+					{
+						"name": "fromEpoch",
+						"type": "uint256"
+					},
+					{
+						"name": "endTime",
+						"type": "uint256"
+					},
+					{
+						"name": "duration",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"name": "toValidatorID",
+						"type": "uint256"
+					}
+				],
+				"name": "delegate",
+				"outputs": [],
+				"payable": true,
+				"stateMutability": "payable",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"name": "epoch",
+						"type": "uint256"
+					},
+					{
+						"name": "validatorID",
+						"type": "uint256"
+					}
+				],
+				"name": "getEpochOfflineBlocks",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"name": "addr",
+						"type": "address"
+					}
+				],
+				"name": "updateStakeTokenizerAddress",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"name": "pubkey",
+						"type": "bytes"
+					}
+				],
+				"name": "createValidator",
+				"outputs": [],
+				"payable": true,
+				"stateMutability": "payable",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "validatorCommission",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "pure",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"name": "",
+						"type": "address"
+					},
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"name": "stashedRewardsUntilEpoch",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"name": "getValidator",
+				"outputs": [
+					{
+						"name": "status",
+						"type": "uint256"
+					},
+					{
+						"name": "deactivatedTime",
+						"type": "uint256"
+					},
+					{
+						"name": "deactivatedEpoch",
+						"type": "uint256"
+					},
+					{
+						"name": "receivedStake",
+						"type": "uint256"
+					},
+					{
+						"name": "createdEpoch",
+						"type": "uint256"
+					},
+					{
+						"name": "createdTime",
+						"type": "uint256"
+					},
+					{
+						"name": "auth",
+						"type": "address"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"name": "value",
+						"type": "uint256"
+					}
+				],
+				"name": "updateBaseRewardPerSecond",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"name": "",
+						"type": "address"
+					},
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"name": "getStashedLockupRewards",
+				"outputs": [
+					{
+						"name": "lockupExtraReward",
+						"type": "uint256"
+					},
+					{
+						"name": "lockupBaseReward",
+						"type": "uint256"
+					},
+					{
+						"name": "unlockedReward",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "withdrawalPeriodTime",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "pure",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"name": "epoch",
+						"type": "uint256"
+					}
+				],
+				"name": "getEpochValidatorIDs",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256[]"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"name": "toValidatorID",
+						"type": "uint256"
+					},
+					{
+						"name": "lockupDuration",
+						"type": "uint256"
+					},
+					{
+						"name": "amount",
+						"type": "uint256"
+					}
+				],
+				"name": "relockStake",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"name": "validatorID",
+						"type": "uint256"
+					}
+				],
+				"name": "isSlashed",
+				"outputs": [
+					{
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "minSelfStake",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "pure",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"name": "slashingRefundRatio",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "lastValidatorID",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"name": "validatorID",
+						"type": "uint256"
+					},
+					{
+						"name": "syncPubkey",
+						"type": "bool"
+					}
+				],
+				"name": "_syncValidator",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"name": "",
+						"type": "address"
+					},
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"name": "getStake",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"name": "delegator",
+						"type": "address"
+					},
+					{
+						"name": "toValidatorID",
+						"type": "uint256"
+					}
+				],
+				"name": "isLockedUp",
+				"outputs": [
+					{
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "baseRewardPerSecond",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"name": "epoch",
+						"type": "uint256"
+					},
+					{
+						"name": "validatorID",
+						"type": "uint256"
+					}
+				],
+				"name": "getEpochAccumulatedOriginatedTxsFee",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"name": "toValidatorID",
+						"type": "uint256"
+					},
+					{
+						"name": "lockupDuration",
+						"type": "uint256"
+					},
+					{
+						"name": "amount",
+						"type": "uint256"
+					}
+				],
+				"name": "lockStake",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"name": "epoch",
+						"type": "uint256"
+					},
+					{
+						"name": "validatorID",
+						"type": "uint256"
+					}
+				],
+				"name": "getEpochAccumulatedUptime",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"name": "nextValidatorIDs",
+						"type": "uint256[]"
+					}
+				],
+				"name": "sealEpochValidators",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"name": "epoch",
+						"type": "uint256"
+					},
+					{
+						"name": "validatorID",
+						"type": "uint256"
+					}
+				],
+				"name": "getEpochOfflineTime",
+				"outputs": [
+					{
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"name": "offlineTime",
+						"type": "uint256[]"
+					},
+					{
+						"name": "offlineBlocks",
+						"type": "uint256[]"
+					},
+					{
+						"name": "uptimes",
+						"type": "uint256[]"
+					},
+					{
+						"name": "originatedTxsFee",
+						"type": "uint256[]"
+					}
+				],
+				"name": "sealEpoch",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"name": "newOwner",
+						"type": "address"
+					}
+				],
+				"name": "transferOwnership",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"name": "validatorID",
+						"type": "uint256"
+					},
+					{
+						"indexed": true,
+						"name": "auth",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"name": "createdEpoch",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"name": "createdTime",
+						"type": "uint256"
+					}
+				],
+				"name": "CreatedValidator",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"name": "validatorID",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"name": "deactivatedEpoch",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"name": "deactivatedTime",
+						"type": "uint256"
+					}
+				],
+				"name": "DeactivatedValidator",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"name": "validatorID",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"name": "status",
+						"type": "uint256"
+					}
+				],
+				"name": "ChangedValidatorStatus",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"name": "delegator",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"name": "toValidatorID",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"name": "amount",
+						"type": "uint256"
+					}
+				],
+				"name": "Delegated",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"name": "delegator",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"name": "toValidatorID",
+						"type": "uint256"
+					},
+					{
+						"indexed": true,
+						"name": "wrID",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"name": "amount",
+						"type": "uint256"
+					}
+				],
+				"name": "Undelegated",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"name": "delegator",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"name": "toValidatorID",
+						"type": "uint256"
+					},
+					{
+						"indexed": true,
+						"name": "wrID",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"name": "amount",
+						"type": "uint256"
+					}
+				],
+				"name": "Withdrawn",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"name": "delegator",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"name": "toValidatorID",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"name": "lockupExtraReward",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"name": "lockupBaseReward",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"name": "unlockedReward",
+						"type": "uint256"
+					}
+				],
+				"name": "ClaimedRewards",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"name": "delegator",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"name": "toValidatorID",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"name": "lockupExtraReward",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"name": "lockupBaseReward",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"name": "unlockedReward",
+						"type": "uint256"
+					}
+				],
+				"name": "RestakedRewards",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"name": "delegator",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"name": "validatorID",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"name": "duration",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"name": "amount",
+						"type": "uint256"
+					}
+				],
+				"name": "LockedUpStake",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"name": "delegator",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"name": "validatorID",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"name": "amount",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"name": "penalty",
+						"type": "uint256"
+					}
+				],
+				"name": "UnlockedStake",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": false,
+						"name": "value",
+						"type": "uint256"
+					}
+				],
+				"name": "UpdatedBaseRewardPerSec",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": false,
+						"name": "blocksNum",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"name": "period",
+						"type": "uint256"
+					}
+				],
+				"name": "UpdatedOfflinePenaltyThreshold",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"name": "validatorID",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"name": "refundRatio",
+						"type": "uint256"
+					}
+				],
+				"name": "UpdatedSlashingRefundRatio",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"name": "delegator",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"name": "validatorID",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"name": "amount",
+						"type": "uint256"
+					}
+				],
+				"name": "RefundedSlashedLegacyDelegation",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"name": "previousOwner",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"name": "newOwner",
+						"type": "address"
+					}
+				],
+				"name": "OwnershipTransferred",
+				"type": "event"
+			}
+		],
+		"devdoc": {
+			"details": "Stakers contract defines data structure and methods for validators / validators.",
+			"methods": {
+				"contractCommission()": {
+					"details": "The commission fee in percentage a validator will get from a contract, e.g., 30%"
+				},
+				"isOwner()": {
+					"details": "Returns true if the caller is the current owner."
+				},
+				"maxDelegatedRatio()": {
+					"details": "Maximum ratio of delegations a validator can have, say, 15 times of self-stake"
+				},
+				"maxLockupDuration()": {
+					"details": "The maximum duration of a stake/delegation lockup, e.g. 1 year"
+				},
+				"minLockupDuration()": {
+					"details": "The minimum duration of a stake/delegation lockup, e.g. 2 weeks"
+				},
+				"minSelfStake()": {
+					"details": "Minimum amount of stake for a validator, i.e., 1000000 NEC"
+				},
+				"owner()": {
+					"details": "Returns the address of the current owner."
+				},
+				"renounceOwnership()": {
+					"details": "Leaves the contract without owner. It will not be possible to call `onlyOwner` functions anymore. Can only be called by the current owner.     * > Note: Renouncing ownership will leave the contract without an owner, thereby removing any functionality that is only available to the owner."
+				},
+				"transferOwnership(address)": {
+					"details": "Transfers ownership of the contract to a new account (`newOwner`). Can only be called by the current owner."
+				},
+				"unlockedRewardRatio()": {
+					"details": "The ratio of the reward rate at base rate (no lock), e.g., 30%"
+				},
+				"validatorCommission()": {
+					"details": "The commission fee in percentage a validator will get from a delegation, e.g., 15%"
+				},
+				"version()": {
+					"details": "Returns the address of the current owner."
+				},
+				"withdrawalPeriodEpochs()": {
+					"details": "the number of epochs that stake is locked"
+				}
+			}
+		},
+		"userdoc": {
+			"methods": {}
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"contracts/sfc/SFC.sol": "SFC"
+		},
+		"evmVersion": "byzantium",
+		"libraries": {},
+		"optimizer": {
+			"enabled": false,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"@openzeppelin/contracts/math/SafeMath.sol": {
+			"keccak256": "0x640b6dee7a4b830bdfd52b5031a07fc2b12209f5b2e29e5d364a7d37f69d8076",
+			"urls": [
+				"bzzr://292843005e754e752644f767477ec5ad7a1ffc91ddb18c38b8079c62f3993cad"
+			]
+		},
+		"contracts/common/Decimal.sol": {
+			"keccak256": "0xbcb031ee00dd2d7911ae818327fd6423d8525613bd56b5e776f6a089bf8d9267",
+			"urls": [
+				"bzzr://8bee34f68954f0554e01a3e18a44061df7580e06d932cc9860dc1f98c041eda7"
+			]
+		},
+		"contracts/common/Initializable.sol": {
+			"keccak256": "0x9bfec92e36234ecc99b5d37230acb6cd1f99560233753162204104a4897e8721",
+			"urls": [
+				"bzzr://f75d88b16fe25a9e19b3512691c496e2bb6d8451bc9a636196c4e17ca9b40201"
+			]
+		},
+		"contracts/erc20/base/ERC20.sol": {
+			"keccak256": "0xdbabd772f9550f70cb4f2e1fd6e82c10881cb96cdef6bac862614a6a851a2b2f",
+			"urls": [
+				"bzzr://b2ea04d8b27ccad0b2363c0e9ed45abdc20f737c513598eff4db52563de67845"
+			]
+		},
+		"contracts/erc20/base/ERC20Burnable.sol": {
+			"keccak256": "0xfb5740ca74521d54206919c009203a6ba82f30709526053674fc887e999141df",
+			"urls": [
+				"bzzr://89c35b96a5c32dbcce0a2b6455c348c290e447382dec17e731abfce9c0e78dd5"
+			]
+		},
+		"contracts/erc20/base/ERC20Mintable.sol": {
+			"keccak256": "0x52b0e36a48d15e415d599b45f2bcc9b37eafe068a893c5faaebb71a43ca0590b",
+			"urls": [
+				"bzzr://d0a170b5c08675b091a13c8c49b1002f15b2d20b8688fa1c55eb9f1515548536"
+			]
+		},
+		"contracts/erc20/base/IERC20.sol": {
+			"keccak256": "0xe92a180661a6e21051d45be08a572dbf8d61e04c142d4284e503f615aed587fd",
+			"urls": [
+				"bzzr://a8c43903ba49aa0684b6201dbe8d8e5a330151bdb8ce77eb88f6c6bc58b796e8"
+			]
+		},
+		"contracts/erc20/base/MinterRole.sol": {
+			"keccak256": "0x2ecc61b695aa6b398c6057cb77765a11222dd43b541808d3accf1992264eb912",
+			"urls": [
+				"bzzr://8de231c63fb6670cb7ad0b4955c81fb11125f16de15e5a6e03724307bff9e159"
+			]
+		},
+		"contracts/erc20/base/Roles.sol": {
+			"keccak256": "0xd47c9e402e9cab94b5d5af534c7f465379a7f036ea440979031d5661cbdda8a5",
+			"urls": [
+				"bzzr://be66d2fdf837cd45dc411f2f695166eac6a50f44d7edbc65a4a1da1b23e85d9f"
+			]
+		},
+		"contracts/ownership/Ownable.sol": {
+			"keccak256": "0xc547bdb08376dba8863405a37f711fb091089af849dccb34495292239b1d273d",
+			"urls": [
+				"bzzr://5df4ec5a2f7160905458002c2a4c10e2407b4d3726b91f011d03acd72ebf4bd1"
+			]
+		},
+		"contracts/sfc/NodeDriver.sol": {
+			"keccak256": "0x846db409de038b04781ce831fef9a9d10fbdfc038333c84d5dcb26a595dbdac0",
+			"urls": [
+				"bzzr://bde07ebff84394bfe3211c4b6fc78636fba032f4c3e306ee7e3baaa2f2104e96"
+			]
+		},
+		"contracts/sfc/SFC.sol": {
+			"keccak256": "0x3232c29facca290ace2ef09ce6af1df1471bcc303062708b02ddfde1f51a3164",
+			"urls": [
+				"bzzr://124491bf12b74a5c96e572d2e83ad5166835669b03fb5fa1915ba8c11cc1ec8e"
+			]
+		},
+		"contracts/sfc/StakeTokenizer.sol": {
+			"keccak256": "0x63238b8d097ce9bdaf97d0b54983459faeccf33c8290e2002c558d1f322004c2",
+			"urls": [
+				"bzzr://22adc4f5479d670feb097e15f6a657f95ef1c0cb4ca4598f32d21e05ffe355ed"
+			]
+		},
+		"contracts/sfc/StakerConstants.sol": {
+			"keccak256": "0x2cf587bcad7958f23a0d576ce694c27c46657ea892ffb5d41a181b1d4f978b1d",
+			"urls": [
+				"bzzr://ac6e81f87895398b65c20e23d789be539f14172623f5665b748ac137ee2423fa"
+			]
+		},
+		"contracts/version/Version.sol": {
+			"keccak256": "0x88b7ff809aae353ab0628ce94a246d177e6f166958be6ac809a422e6e4cb1e91",
+			"urls": [
+				"bzzr://50327e8fb94738ee60c174f19c41c8718a7702c029b54d02ef849481c38e09aa"
+			]
+		}
+	},
+	"version": 1
+}
