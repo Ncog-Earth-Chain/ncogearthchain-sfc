@@ -1,0 +1,11 @@
+{
+  "name": "ncogearthchain-sfc-port-0.8.20",
+  "private": true,
+  "description": "Mechanical solc-0.8.20 port of the four genesis predeploys (SFC, NodeDriver, NodeDriverAuth, NetworkInitializer). See README.md.",
+  "scripts": {
+    "build": "node compile.js"
+  },
+  "devDependencies": {
+    "solc": "0.8.20"
+  }
+}

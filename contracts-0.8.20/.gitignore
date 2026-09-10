@@ -1,0 +1,6 @@
+# Installed by `npm install` (solc 0.8.20, pinned in package-lock.json).
+node_modules/
+# Produced by `npm run build`. The artefacts that matter are committed in the node repository, as
+# ncogearthchain/genesis/sfc/testdata/port-0.8.20/, where a test compares them to the genesis blobs
+# without needing solc.
+out/

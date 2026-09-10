@@ -1,0 +1,14 @@
+pragma solidity ^0.8.0;
+
+/**
+ * @dev Version contract gives the versioning information of the implementation contract
+ */
+contract Version {
+    /**
+     * @dev Returns the address of the current owner.
+     */
+    function version() public pure returns (bytes3) {
+        // version 3.0.2
+        return "302";
+    }
+}
