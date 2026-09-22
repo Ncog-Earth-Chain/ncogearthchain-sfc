@@ -17,8 +17,22 @@ pragma solidity 0.8.20;
  *    a weight update for the same validator, exactly as v1's `_syncValidator(id, true)` does
  *    (gossip/blockproc/drivermodule/driver_txs.go, the UpdateValidatorPubkey branch).
  *  - incBalance -> NodeDriver.setBalance on the SFC itself (the recipient must be the SFC). This is
- *    the chain's only native mint path. In v2 it is used for the bounded tail mint only, and every
- *    use moves `totalSupply`.
+ *    the chain's only way to credit native NEC. SFC v2 has exactly three uses for it, and only the
+ *    third moves the supply ledger (docs/design/sfc-v2.md in the node repository, 6.1 and 7):
+ *
+ *      1. setGenesisDelegation, block 1: credits the genesis stake WITHOUT moving `totalSupply`,
+ *         because the stake is already inside the declared supply `initialize` recorded
+ *         (DECIDE-14; ECO-01a's `stakeInsideSupply`). Adding it again is the 4M double count
+ *         ECO-01a found in v1.
+ *      2. sealEpoch, fee re-credit: credits 100% of the epoch's gas fees WITHOUT moving
+ *         `totalSupply`. The node debited exactly that amount from the senders at execution
+ *         (buyGas / refundGas), so the debit and this credit net to zero (DECIDE-25: nothing is
+ *         destroyed).
+ *      3. the tail mint, through `_mint` only: the one use that moves `totalSupply` (and
+ *         `totalMinted`) by the amount credited. Reward CLAIMS never call incBalance; they pay out
+ *         NEC the SFC already holds.
+ *
+ *    Any other call is a supply-ledger bug.
  */
 interface INodeDriverAuth {
     function incBalance(address acc, uint256 diff) external;

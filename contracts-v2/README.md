@@ -37,10 +37,19 @@ reproduced, because each carries an IPFS hash of a working tree nobody has (GOV-
 `npm run verify` fails unless:
 
 1. a fresh build is byte-identical to the committed `out/`;
-2. every storage layout is **append-only** against `layout/<Contract>.json`: no baseline variable
-   changes slot, offset or type, and the only rename allowed is to `__deprecated_<name>`;
+2. every storage layout is **append-only** against `layout/<Contract>.json`, **recursively**: no
+   baseline variable changes slot, offset or type; inside every type, no struct member changes slot,
+   offset or type, no array changes length and nothing stored inline changes size; the one growth
+   allowed is members appended after every existing member of a struct that is a **mapping value**
+   (SFC v1's `Validator`, `WithdrawalRequest`, `LockedDelegation`, `EpochSnapshot`); the only
+   rename allowed is to `__deprecated_<name>`. The rule is `checkAppendOnly` in `build-lib.js`, and
+   the layouts in `out/*.storage.json` and `layout/` carry every struct member for it;
 3. with `--node`, the node repository's `ncogearthchain/genesis/sfc/testdata/v2/` copies are
-   byte-identical to `out/`.
+   byte-identical to `out/`;
+4. the gate in 2 still has teeth: a **self-test** compiles broken variants of `ConstantsManager`
+   (its `History` struct reordered, a `Change` member retyped or resized, the ring resized, a member
+   added to the inline `Change`, `_values` resized) and requires each to be refused, and one legal
+   append (a member at the end of `History`) and requires it to be accepted.
 
 ## Tests
 

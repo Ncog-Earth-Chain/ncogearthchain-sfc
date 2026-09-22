@@ -3,42 +3,122 @@
   "slot": "0",
   "offset": 0,
   "label": "_initialized",
-  "type": "uint8"
+  "type": "uint8",
+  "encoding": "inplace",
+  "bytes": 1
  },
  {
   "slot": "0",
   "offset": 1,
   "label": "_initializing",
-  "type": "bool"
+  "type": "bool",
+  "encoding": "inplace",
+  "bytes": 1
  },
  {
   "slot": "1",
   "offset": 0,
   "label": "______gap",
-  "type": "uint256[50]"
+  "type": "uint256[50]",
+  "encoding": "inplace",
+  "bytes": 1600,
+  "base": {
+   "type": "uint256",
+   "encoding": "inplace",
+   "bytes": 32
+  }
  },
  {
   "slot": "51",
   "offset": 0,
   "label": "_owner",
-  "type": "address"
+  "type": "address",
+  "encoding": "inplace",
+  "bytes": 20
  },
  {
   "slot": "52",
   "offset": 0,
   "label": "______gap",
-  "type": "uint256[50]"
+  "type": "uint256[50]",
+  "encoding": "inplace",
+  "bytes": 1600,
+  "base": {
+   "type": "uint256",
+   "encoding": "inplace",
+   "bytes": 32
+  }
  },
  {
   "slot": "102",
   "offset": 0,
   "label": "_values",
-  "type": "uint256[64]"
+  "type": "uint256[64]",
+  "encoding": "inplace",
+  "bytes": 2048,
+  "base": {
+   "type": "uint256",
+   "encoding": "inplace",
+   "bytes": 32
+  }
  },
  {
   "slot": "166",
   "offset": 0,
   "label": "_history",
-  "type": "mapping(enum ConstantsManager.Param => struct ConstantsManager.History)"
+  "type": "mapping(enum ConstantsManager.Param => struct ConstantsManager.History)",
+  "encoding": "mapping",
+  "bytes": 32,
+  "key": {
+   "type": "enum ConstantsManager.Param",
+   "encoding": "inplace",
+   "bytes": 1
+  },
+  "value": {
+   "type": "struct ConstantsManager.History",
+   "encoding": "inplace",
+   "bytes": 288,
+   "members": [
+    {
+     "slot": "0",
+     "offset": 0,
+     "label": "ring",
+     "type": "struct ConstantsManager.Change[8]",
+     "encoding": "inplace",
+     "bytes": 256,
+     "base": {
+      "type": "struct ConstantsManager.Change",
+      "encoding": "inplace",
+      "bytes": 32,
+      "members": [
+       {
+        "slot": "0",
+        "offset": 0,
+        "label": "time",
+        "type": "uint64",
+        "encoding": "inplace",
+        "bytes": 8
+       },
+       {
+        "slot": "0",
+        "offset": 8,
+        "label": "previous",
+        "type": "uint192",
+        "encoding": "inplace",
+        "bytes": 24
+       }
+      ]
+     }
+    },
+    {
+     "slot": "8",
+     "offset": 0,
+     "label": "head",
+     "type": "uint8",
+     "encoding": "inplace",
+     "bytes": 1
+    }
+   ]
+  }
  }
 ]

@@ -185,6 +185,9 @@ contract ConstantsManager is Initializable, Ownable {
 
     /// @notice The concentration cap: a validator's total weight (self-stake plus delegations) as a
     /// share of the total active stake that SFC v2 refuses to let any stake-increasing action exceed.
+    /// @dev The denominator is total ACTIVE stake, where DECIDE-24 says "10% of total stake". That
+    /// is stricter whenever validators are offline, and it waits for the owner's confirmation
+    /// (docs/design/sfc-v2.md 9, D3, in the node repository).
     function maxValidatorWeightShare() external view returns (uint256) {
         return _values[uint256(Param.MaxValidatorWeightShare)];
     }
