@@ -1,0 +1,44 @@
+[
+ {
+  "slot": "0",
+  "offset": 0,
+  "label": "_initialized",
+  "type": "uint8"
+ },
+ {
+  "slot": "0",
+  "offset": 1,
+  "label": "_initializing",
+  "type": "bool"
+ },
+ {
+  "slot": "1",
+  "offset": 0,
+  "label": "______gap",
+  "type": "uint256[50]"
+ },
+ {
+  "slot": "51",
+  "offset": 0,
+  "label": "_owner",
+  "type": "address"
+ },
+ {
+  "slot": "52",
+  "offset": 0,
+  "label": "______gap",
+  "type": "uint256[50]"
+ },
+ {
+  "slot": "102",
+  "offset": 0,
+  "label": "_values",
+  "type": "uint256[64]"
+ },
+ {
+  "slot": "166",
+  "offset": 0,
+  "label": "_history",
+  "type": "mapping(enum ConstantsManager.Param => struct ConstantsManager.History)"
+ }
+]
