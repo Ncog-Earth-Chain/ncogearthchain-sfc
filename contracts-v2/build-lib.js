@@ -117,12 +117,21 @@ function compactLayout(layout) {
 // over storage written by the baseline.
 //
 //  - A top-level baseline variable keeps its slot, offset and type, recursively (below). It may be
-//    renamed only to __deprecated_<name>. New top-level variables may be added where no baseline
-//    variable is (after the last one, or in place of a gap the author shrinks -- the gap rule is the
-//    author's, this check only guarantees nothing baseline moved).
+//    renamed only to __deprecated_<name>. The two exceptions are LAYOUT_COMPAT (below), a reviewed
+//    table that is the only way a top-level type or name may change, and a GAP used from the front
+//    (below). New top-level variables may be added where no baseline variable is: after the last
+//    one, or at the front of a baseline gap.
+//  - A GAP is a top-level `uint256[N]` whose name ends in `gap` (v1's `______gap`, v2's `__gap`).
+//    It may be used only from the FRONT: new variables in its first k slots, then `uint256[N-k]`
+//    with the SAME name at slot s+k, so the gap still ends where it did and nothing after it moves.
+//    A gap that grows, shrinks at the back, moves its end, changes its name or is used up entirely
+//    is refused (to use its last slot, leave `uint256[1]`). Gap slots were never written, so the new
+//    variables start from zero on an install over the baseline's storage.
 //  - Inside a type, recursively:
 //      * the type label and encoding never change (this also pins every array length, which is part
-//        of the label, and every mapping's key and value type labels);
+//        of the label, and every mapping's key and value type labels). Labels are compared by
+//        typeKey (below): the contract that DECLARES a struct or enum, and the name of a
+//        contract-typed variable's contract, are not part of the comparison;
 //      * a type stored INLINE -- a top-level variable, a struct member, a static-array element, a
 //        dynamic-array element (its size is the stride) or a mapping key -- keeps its exact size;
 //      * the one place a size may grow is a STRUCT that is the value of a mapping: each of its
@@ -130,22 +139,133 @@ function compactLayout(layout) {
 //        existing data;
 //      * every baseline struct member keeps its slot, offset and type (recursively), renamed only to
 //        __deprecated_<name>; members are only ever appended, never inserted, removed or reordered.
+//        Neither LAYOUT_COMPAT nor the gap rule applies inside a type.
+//
+// LAYOUT_COMPAT: the reviewed exceptions to "a top-level variable never changes type or name". Each
+// entry names ONE top-level position and the exact baseline variable (type and name) and the exact
+// variable that may replace it; nothing else is ever matched against it -- not another slot or
+// offset, not another type, not another name, not a struct member. Adding an entry is a design
+// change: it needs a reviewed argument that the new type reads the old bytes with the old meaning,
+// recorded here and in docs/design/sfc-v2.md §5.2 of the node repository, and a verify.js self-test
+// case. verify.js refuses to run with a malformed entry.
+const LAYOUT_COMPAT = [
+    {
+        // v1 (Fantom) Initializable -> v2 Initializable (contracts/common/Initializable.sol). Both are
+        // one byte stored in place at slot 0 byte 0. v1 writes it 0x01 when its initializer has run;
+        // v2 reads the same byte as the initializer VERSION, so v1 `true` is version 1 and
+        // `reinitializer(2)` runs exactly once over v1 storage (design §5.1 row 0).
+        slot: '0',
+        offset: 0,
+        was: { type: 'bool', label: 'initialized' },
+        now: { type: 'uint8', label: '_initialized' },
+    },
+    {
+        // The same contract: slot 0 byte 1 keeps its type and meaning; only the name changes.
+        slot: '0',
+        offset: 1,
+        was: { type: 'bool', label: 'initializing' },
+        now: { type: 'bool', label: '_initializing' },
+    },
+];
+
+// Elementary one-slot-or-less value types, the only ones LAYOUT_COMPAT may name.
+const COMPAT_TYPE = /^(bool|address|uint\d+|int\d+|bytes\d+)$/;
+
+function checkCompatTable() {
+    const errs = [];
+    for (const c of LAYOUT_COMPAT) {
+        const ok =
+            typeof c.slot === 'string' &&
+            Number.isInteger(c.offset) &&
+            COMPAT_TYPE.test(c.was.type) &&
+            COMPAT_TYPE.test(c.now.type) &&
+            typeof c.was.label === 'string' &&
+            typeof c.now.label === 'string';
+        if (!ok) errs.push(`LAYOUT_COMPAT entry at slot ${c.slot}+${c.offset} is malformed: ${JSON.stringify(c)}`);
+    }
+    return errs;
+}
+
+// Whether top-level `n` may replace top-level baseline `b` under LAYOUT_COMPAT.
+function compatible(b, n) {
+    return LAYOUT_COMPAT.some(
+        (c) =>
+            c.slot === b.slot &&
+            c.offset === b.offset &&
+            c.was.type === b.type &&
+            c.was.label === b.label &&
+            c.now.type === n.type &&
+            c.now.label === n.label &&
+            b.encoding === 'inplace' &&
+            n.encoding === 'inplace' &&
+            b.bytes === n.bytes,
+    );
+}
+
+// N for a top-level gap `uint256[N] ...gap` at offset 0, else 0.
+function gapLength(v) {
+    const m = /^uint256\[(\d+)\]$/.exec(v.type);
+    return m && v.encoding === 'inplace' && v.offset === 0 && /gap$/.test(v.label) ? Number(m[1]) : 0;
+}
+
+// Whether baseline gap `b` (N slots from s) is now used from the front: a gap with the same name,
+// uint256[M] with 0 < M < N, at slot s + (N - M). Whatever sits in slots s .. s+N-M-1 is new.
+function gapUsedFromFront(b, now) {
+    const N = gapLength(b);
+    return now.some((g) => {
+        const M = g.label === b.label ? gapLength(g) : 0;
+        return M > 0 && M < N && Number(g.slot) === Number(b.slot) + (N - M);
+    });
+}
+
 function checkAppendOnly(contract, base, now) {
     const errs = [];
     for (const b of base) {
         const n = now.find((x) => x.slot === b.slot && x.offset === b.offset);
+        const gap = gapLength(b);
+        if (gap && (!n || !sameType(b, n))) {
+            if (gapUsedFromFront(b, now)) continue;
+            const s = Number(b.slot);
+            errs.push(
+                `${contract}: slot ${b.slot}+${b.offset} was ${b.type} ${b.label}, is now ${n ? `${n.type} ${n.label}` : 'nothing'}` +
+                    ` (a gap is used only from the front: new variables in slots ${s}..${s}+k-1, then` +
+                    ` uint256[${gap}-k] ${b.label} at slot ${s}+k, so it still ends at slot ${s + gap - 1})`,
+            );
+            continue;
+        }
         if (!n) {
             errs.push(`${contract}: baseline variable ${b.label} at slot ${b.slot}+${b.offset} is gone`);
             continue;
         }
+        if (compatible(b, n)) continue;
         comparePositioned(errs, contract, b, n);
     }
     return errs;
 }
 
+// The part of a solc type label that is about storage. solc qualifies a struct or enum with the
+// contract that DECLARES it ("struct SFC.Validator"), and names a contract-typed variable by its
+// contract ("contract NodeDriverAuth"). Neither is a property of the stored bytes: moving the v1
+// declarations into a base contract, as design §5.2 does with SFCStorageV1, turns every
+// "struct SFC.X" into "struct SFCStorageV1.X", and typing slot 102 as the INodeDriverAuth interface
+// turns "contract NodeDriverAuth" into "contract INodeDriverAuth"; each is still the same members or
+// the same 20-byte address. So the declaring contract is dropped (the struct's or enum's OWN name is
+// kept, and its members, size and encoding are still checked recursively), and every contract or
+// interface type compares equal to every other. A contract type does NOT compare equal to `address`.
+// The labels in messages are solc's, unchanged.
+function typeKey(label) {
+    return label
+        .replace(/\b(struct|enum) (?:[A-Za-z_$][\w$]*\.)+([A-Za-z_$][\w$]*)/g, '$1 $2')
+        .replace(/\bcontract [A-Za-z_$][\w$]*/g, 'contract');
+}
+
+function sameType(b, n) {
+    return typeKey(n.type) === typeKey(b.type) && n.encoding === b.encoding;
+}
+
 // A baseline variable or struct member `b` and whatever now sits at its slot and offset.
 function comparePositioned(errs, where, b, n) {
-    if (n.type !== b.type || n.encoding !== b.encoding) {
+    if (!sameType(b, n)) {
         errs.push(`${where}: slot ${b.slot}+${b.offset} was ${b.type} ${b.label}, is now ${n.type} ${n.label}`);
         return;
     }
@@ -160,7 +280,7 @@ function compareType(errs, where, b, n, growable) {
         errs.push(`${where}: ${b.type} is gone`);
         return;
     }
-    if (n.type !== b.type || n.encoding !== b.encoding) {
+    if (!sameType(b, n)) {
         errs.push(`${where}: was ${b.type} (${b.encoding}), is now ${n.type} (${n.encoding})`);
         return;
     }
@@ -243,12 +363,12 @@ function build() {
     return { files, warnings };
 }
 
-// The compact storage layout of one contract compiled from patched sources, without code
-// generation (storageLayout needs only analysis, so this is fast). For verify.js's self-test.
-function layoutOf(file, name, patches) {
+// The compact storage layout of `file`:`name` compiled from `srcs`, without code generation
+// (storageLayout needs only analysis, so this is fast).
+function compileLayout(srcs, file, name) {
     const input = {
         language: 'Solidity',
-        sources: sources(patches),
+        sources: srcs,
         settings: { evmVersion: SETTINGS.evmVersion, outputSelection: { [file]: { [name]: ['storageLayout'] } } },
     };
     const out = JSON.parse(solc.compile(JSON.stringify(input)));
@@ -259,4 +379,60 @@ function layoutOf(file, name, patches) {
     return compactLayout(out.contracts[file][name].storageLayout);
 }
 
-module.exports = { ROOT, SETTINGS, TARGETS, build, layoutOf, checkAppendOnly };
+// The compact storage layout of one SFC v2 contract compiled from patched sources. For verify.js's
+// self-test.
+function layoutOf(file, name, patches) {
+    return compileLayout(sources(patches), file, name);
+}
+
+// ---------------------------------------------------------------------------------------------
+// The v1 baseline. SFC v2 core is installed over the storage of the v1 SFC, so its append-only
+// baseline is v1's layout, not v2's first build (docs/design/sfc-v2.md §5.2). The v1 layout comes
+// from solc's storageLayout of the mechanical 0.8.20 port in ../contracts-0.8.20, which the node's
+// TestV1StorageIsThePortLayout proves the deployed blob uses, slot by slot.
+//
+// PORT_BASELINES names the contracts whose layout/<name>.json must be EXACTLY the port's compiled
+// layout: verify.js regenerates it and fails on any difference, so the baseline can never be a
+// hand-edited file. `node compile.js --port-baselines` writes it.
+const PORT_ROOT = path.join(ROOT, '..', 'contracts-0.8.20');
+const PORT_BASELINES = { SFC: { file: 'contracts/sfc/SFC.sol', name: 'SFC' } };
+
+function portSources() {
+    const out = {};
+    const read = (f) => ({ content: fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n') });
+    // The port's unit names mirror the 0.5.17 tree (see ../contracts-0.8.20/compile.js):
+    // contracts/... as-is, and lib/openzeppelin/... answers for @openzeppelin/contracts/... .
+    for (const f of walk(path.join(PORT_ROOT, 'contracts'), [])) {
+        out[path.relative(PORT_ROOT, f).split(path.sep).join('/')] = read(f);
+    }
+    const oz = path.join(PORT_ROOT, 'lib', 'openzeppelin');
+    for (const f of walk(oz, [])) {
+        out['@openzeppelin/contracts/' + path.relative(oz, f).split(path.sep).join('/')] = read(f);
+    }
+    return out;
+}
+
+// The compact storage layout of a contract of the v1 port.
+function portLayout(file, name) {
+    return compileLayout(portSources(), file, name);
+}
+
+// The exact text layout/<contract>.json must hold for a PORT_BASELINES contract.
+function portBaselineText(contract) {
+    const p = PORT_BASELINES[contract];
+    return JSON.stringify(portLayout(p.file, p.name), null, 1) + '\n';
+}
+
+module.exports = {
+    ROOT,
+    SETTINGS,
+    TARGETS,
+    LAYOUT_COMPAT,
+    PORT_BASELINES,
+    build,
+    layoutOf,
+    portLayout,
+    portBaselineText,
+    checkAppendOnly,
+    checkCompatTable,
+};
