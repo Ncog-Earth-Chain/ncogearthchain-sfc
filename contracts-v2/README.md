@@ -17,7 +17,9 @@ every function's access rule and bound, and the exact node-surface table.
 | `contracts/common/Initializable.sol` | `initializer` / `reinitializer(n)` / `onlyInitializing`, occupying v1's slot 0 bytes | built |
 | `contracts/ownership/Ownable.sol` | owner in v1's slot 51; `renounceOwnership` always reverts | built |
 | `contracts/common/Decimal.sol` | 1e18 == 100% | built |
-| SFC core, RewardsReserve / Treasury / InsurancePool wiring, HostBonds hooks | see §11 of the design | **not yet** |
+| `contracts/sfc/SFC.sol` | SFC v2 core: the node surface, the v1 storage prefix (`SFCStorageV1`, slots 102..123) and v2's appended state (`SFCStorageV2`, from 124), the supply ledger, the fee split, the fixed-budget emission stub drawn from the RewardsReserve, slash-at-fault with routing, the linear unlock penalty, the concentration cap, `reactivateValidator` with the D9 reward gaps, `updateValidatorPubkey`, `call` + ReentrancyGuard, `version()` "200". Every economic figure is read from the ConstantsManager (`value(Param)`); reverts are custom errors (EIP-170: 23,517 B of 24,576) | built, run by the node's harness |
+| `contracts/interfaces/IConstantsManager.sol`, `IRewardsReserve.sol`, `IHostBonds.sol` | the SFC's view of its modules (HostBonds: interface only) | built |
+| RewardsReserve / Treasury / InsurancePool contracts, the install path (mainnet builder, testnet Timelock batch), the glide controller | design §11 items 4, 6; ECO-01b | **not yet** |
 
 ## Build
 
@@ -73,7 +75,8 @@ The tests are in the node repository and execute the committed runtime in the EV
 solc:
 
 * `ncogearthchain/genesis/sfc/constants_v2_test.go`: the ConstantsManager against the decided parameter table;
-* `ncogearthchain/genesis/sfc/nodesurface_test.go`: the node-surface harness, which SFC v2 core joins when it is built.
+* `ncogearthchain/genesis/sfc/nodesurface_test.go`: the node-surface harness, which runs SFC v2 core (`v2 SFC core` in `sfcImplementations`) next to the two v1 controls;
+* `ncogearthchain/genesis/sfc/sfcv2_test.go`: SFC v2 core's behaviour: the linear unlock penalty (plan mutant (i)), the `sealEpoch` length check (mutant (ii)), the concentration cap, the D9 reward gaps and the supply identity.
 
 After changing a contract, rebuild, copy the changed `out/` files into the node's `testdata/v2/`,
 update the hash pins in `nodesurface_test.go`, and run both suites.

@@ -1,0 +1,922 @@
+[
+ {
+  "slot": "0",
+  "offset": 0,
+  "label": "_initialized",
+  "type": "uint8",
+  "encoding": "inplace",
+  "bytes": 1
+ },
+ {
+  "slot": "0",
+  "offset": 1,
+  "label": "_initializing",
+  "type": "bool",
+  "encoding": "inplace",
+  "bytes": 1
+ },
+ {
+  "slot": "1",
+  "offset": 0,
+  "label": "______gap",
+  "type": "uint256[50]",
+  "encoding": "inplace",
+  "bytes": 1600,
+  "base": {
+   "type": "uint256",
+   "encoding": "inplace",
+   "bytes": 32
+  }
+ },
+ {
+  "slot": "51",
+  "offset": 0,
+  "label": "_owner",
+  "type": "address",
+  "encoding": "inplace",
+  "bytes": 20
+ },
+ {
+  "slot": "52",
+  "offset": 0,
+  "label": "______gap",
+  "type": "uint256[50]",
+  "encoding": "inplace",
+  "bytes": 1600,
+  "base": {
+   "type": "uint256",
+   "encoding": "inplace",
+   "bytes": 32
+  }
+ },
+ {
+  "slot": "102",
+  "offset": 0,
+  "label": "node",
+  "type": "contract INodeDriverAuth",
+  "encoding": "inplace",
+  "bytes": 20
+ },
+ {
+  "slot": "103",
+  "offset": 0,
+  "label": "currentSealedEpoch",
+  "type": "uint256",
+  "encoding": "inplace",
+  "bytes": 32
+ },
+ {
+  "slot": "104",
+  "offset": 0,
+  "label": "getValidator",
+  "type": "mapping(uint256 => struct SFCStorageV1.Validator)",
+  "encoding": "mapping",
+  "bytes": 32,
+  "key": {
+   "type": "uint256",
+   "encoding": "inplace",
+   "bytes": 32
+  },
+  "value": {
+   "type": "struct SFCStorageV1.Validator",
+   "encoding": "inplace",
+   "bytes": 224,
+   "members": [
+    {
+     "slot": "0",
+     "offset": 0,
+     "label": "status",
+     "type": "uint256",
+     "encoding": "inplace",
+     "bytes": 32
+    },
+    {
+     "slot": "1",
+     "offset": 0,
+     "label": "deactivatedTime",
+     "type": "uint256",
+     "encoding": "inplace",
+     "bytes": 32
+    },
+    {
+     "slot": "2",
+     "offset": 0,
+     "label": "deactivatedEpoch",
+     "type": "uint256",
+     "encoding": "inplace",
+     "bytes": 32
+    },
+    {
+     "slot": "3",
+     "offset": 0,
+     "label": "receivedStake",
+     "type": "uint256",
+     "encoding": "inplace",
+     "bytes": 32
+    },
+    {
+     "slot": "4",
+     "offset": 0,
+     "label": "createdEpoch",
+     "type": "uint256",
+     "encoding": "inplace",
+     "bytes": 32
+    },
+    {
+     "slot": "5",
+     "offset": 0,
+     "label": "createdTime",
+     "type": "uint256",
+     "encoding": "inplace",
+     "bytes": 32
+    },
+    {
+     "slot": "6",
+     "offset": 0,
+     "label": "auth",
+     "type": "address",
+     "encoding": "inplace",
+     "bytes": 20
+    }
+   ]
+  }
+ },
+ {
+  "slot": "105",
+  "offset": 0,
+  "label": "getValidatorID",
+  "type": "mapping(address => uint256)",
+  "encoding": "mapping",
+  "bytes": 32,
+  "key": {
+   "type": "address",
+   "encoding": "inplace",
+   "bytes": 20
+  },
+  "value": {
+   "type": "uint256",
+   "encoding": "inplace",
+   "bytes": 32
+  }
+ },
+ {
+  "slot": "106",
+  "offset": 0,
+  "label": "getValidatorPubkey",
+  "type": "mapping(uint256 => bytes)",
+  "encoding": "mapping",
+  "bytes": 32,
+  "key": {
+   "type": "uint256",
+   "encoding": "inplace",
+   "bytes": 32
+  },
+  "value": {
+   "type": "bytes",
+   "encoding": "bytes",
+   "bytes": 32
+  }
+ },
+ {
+  "slot": "107",
+  "offset": 0,
+  "label": "lastValidatorID",
+  "type": "uint256",
+  "encoding": "inplace",
+  "bytes": 32
+ },
+ {
+  "slot": "108",
+  "offset": 0,
+  "label": "totalStake",
+  "type": "uint256",
+  "encoding": "inplace",
+  "bytes": 32
+ },
+ {
+  "slot": "109",
+  "offset": 0,
+  "label": "totalActiveStake",
+  "type": "uint256",
+  "encoding": "inplace",
+  "bytes": 32
+ },
+ {
+  "slot": "110",
+  "offset": 0,
+  "label": "totalSlashedStake",
+  "type": "uint256",
+  "encoding": "inplace",
+  "bytes": 32
+ },
+ {
+  "slot": "111",
+  "offset": 0,
+  "label": "_rewardsStash",
+  "type": "mapping(address => mapping(uint256 => struct SFCStorageV1.Rewards))",
+  "encoding": "mapping",
+  "bytes": 32,
+  "key": {
+   "type": "address",
+   "encoding": "inplace",
+   "bytes": 20
+  },
+  "value": {
+   "type": "mapping(uint256 => struct SFCStorageV1.Rewards)",
+   "encoding": "mapping",
+   "bytes": 32,
+   "key": {
+    "type": "uint256",
+    "encoding": "inplace",
+    "bytes": 32
+   },
+   "value": {
+    "type": "struct SFCStorageV1.Rewards",
+    "encoding": "inplace",
+    "bytes": 96,
+    "members": [
+     {
+      "slot": "0",
+      "offset": 0,
+      "label": "lockupExtraReward",
+      "type": "uint256",
+      "encoding": "inplace",
+      "bytes": 32
+     },
+     {
+      "slot": "1",
+      "offset": 0,
+      "label": "lockupBaseReward",
+      "type": "uint256",
+      "encoding": "inplace",
+      "bytes": 32
+     },
+     {
+      "slot": "2",
+      "offset": 0,
+      "label": "unlockedReward",
+      "type": "uint256",
+      "encoding": "inplace",
+      "bytes": 32
+     }
+    ]
+   }
+  }
+ },
+ {
+  "slot": "112",
+  "offset": 0,
+  "label": "stashedRewardsUntilEpoch",
+  "type": "mapping(address => mapping(uint256 => uint256))",
+  "encoding": "mapping",
+  "bytes": 32,
+  "key": {
+   "type": "address",
+   "encoding": "inplace",
+   "bytes": 20
+  },
+  "value": {
+   "type": "mapping(uint256 => uint256)",
+   "encoding": "mapping",
+   "bytes": 32,
+   "key": {
+    "type": "uint256",
+    "encoding": "inplace",
+    "bytes": 32
+   },
+   "value": {
+    "type": "uint256",
+    "encoding": "inplace",
+    "bytes": 32
+   }
+  }
+ },
+ {
+  "slot": "113",
+  "offset": 0,
+  "label": "getWithdrawalRequest",
+  "type": "mapping(address => mapping(uint256 => mapping(uint256 => struct SFCStorageV1.WithdrawalRequest)))",
+  "encoding": "mapping",
+  "bytes": 32,
+  "key": {
+   "type": "address",
+   "encoding": "inplace",
+   "bytes": 20
+  },
+  "value": {
+   "type": "mapping(uint256 => mapping(uint256 => struct SFCStorageV1.WithdrawalRequest))",
+   "encoding": "mapping",
+   "bytes": 32,
+   "key": {
+    "type": "uint256",
+    "encoding": "inplace",
+    "bytes": 32
+   },
+   "value": {
+    "type": "mapping(uint256 => struct SFCStorageV1.WithdrawalRequest)",
+    "encoding": "mapping",
+    "bytes": 32,
+    "key": {
+     "type": "uint256",
+     "encoding": "inplace",
+     "bytes": 32
+    },
+    "value": {
+     "type": "struct SFCStorageV1.WithdrawalRequest",
+     "encoding": "inplace",
+     "bytes": 96,
+     "members": [
+      {
+       "slot": "0",
+       "offset": 0,
+       "label": "epoch",
+       "type": "uint256",
+       "encoding": "inplace",
+       "bytes": 32
+      },
+      {
+       "slot": "1",
+       "offset": 0,
+       "label": "time",
+       "type": "uint256",
+       "encoding": "inplace",
+       "bytes": 32
+      },
+      {
+       "slot": "2",
+       "offset": 0,
+       "label": "amount",
+       "type": "uint256",
+       "encoding": "inplace",
+       "bytes": 32
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "slot": "114",
+  "offset": 0,
+  "label": "getStake",
+  "type": "mapping(address => mapping(uint256 => uint256))",
+  "encoding": "mapping",
+  "bytes": 32,
+  "key": {
+   "type": "address",
+   "encoding": "inplace",
+   "bytes": 20
+  },
+  "value": {
+   "type": "mapping(uint256 => uint256)",
+   "encoding": "mapping",
+   "bytes": 32,
+   "key": {
+    "type": "uint256",
+    "encoding": "inplace",
+    "bytes": 32
+   },
+   "value": {
+    "type": "uint256",
+    "encoding": "inplace",
+    "bytes": 32
+   }
+  }
+ },
+ {
+  "slot": "115",
+  "offset": 0,
+  "label": "getLockupInfo",
+  "type": "mapping(address => mapping(uint256 => struct SFCStorageV1.LockedDelegation))",
+  "encoding": "mapping",
+  "bytes": 32,
+  "key": {
+   "type": "address",
+   "encoding": "inplace",
+   "bytes": 20
+  },
+  "value": {
+   "type": "mapping(uint256 => struct SFCStorageV1.LockedDelegation)",
+   "encoding": "mapping",
+   "bytes": 32,
+   "key": {
+    "type": "uint256",
+    "encoding": "inplace",
+    "bytes": 32
+   },
+   "value": {
+    "type": "struct SFCStorageV1.LockedDelegation",
+    "encoding": "inplace",
+    "bytes": 128,
+    "members": [
+     {
+      "slot": "0",
+      "offset": 0,
+      "label": "lockedStake",
+      "type": "uint256",
+      "encoding": "inplace",
+      "bytes": 32
+     },
+     {
+      "slot": "1",
+      "offset": 0,
+      "label": "fromEpoch",
+      "type": "uint256",
+      "encoding": "inplace",
+      "bytes": 32
+     },
+     {
+      "slot": "2",
+      "offset": 0,
+      "label": "endTime",
+      "type": "uint256",
+      "encoding": "inplace",
+      "bytes": 32
+     },
+     {
+      "slot": "3",
+      "offset": 0,
+      "label": "duration",
+      "type": "uint256",
+      "encoding": "inplace",
+      "bytes": 32
+     }
+    ]
+   }
+  }
+ },
+ {
+  "slot": "116",
+  "offset": 0,
+  "label": "getStashedLockupRewards",
+  "type": "mapping(address => mapping(uint256 => struct SFCStorageV1.Rewards))",
+  "encoding": "mapping",
+  "bytes": 32,
+  "key": {
+   "type": "address",
+   "encoding": "inplace",
+   "bytes": 20
+  },
+  "value": {
+   "type": "mapping(uint256 => struct SFCStorageV1.Rewards)",
+   "encoding": "mapping",
+   "bytes": 32,
+   "key": {
+    "type": "uint256",
+    "encoding": "inplace",
+    "bytes": 32
+   },
+   "value": {
+    "type": "struct SFCStorageV1.Rewards",
+    "encoding": "inplace",
+    "bytes": 96,
+    "members": [
+     {
+      "slot": "0",
+      "offset": 0,
+      "label": "lockupExtraReward",
+      "type": "uint256",
+      "encoding": "inplace",
+      "bytes": 32
+     },
+     {
+      "slot": "1",
+      "offset": 0,
+      "label": "lockupBaseReward",
+      "type": "uint256",
+      "encoding": "inplace",
+      "bytes": 32
+     },
+     {
+      "slot": "2",
+      "offset": 0,
+      "label": "unlockedReward",
+      "type": "uint256",
+      "encoding": "inplace",
+      "bytes": 32
+     }
+    ]
+   }
+  }
+ },
+ {
+  "slot": "117",
+  "offset": 0,
+  "label": "__deprecated_baseRewardPerSecond",
+  "type": "uint256",
+  "encoding": "inplace",
+  "bytes": 32
+ },
+ {
+  "slot": "118",
+  "offset": 0,
+  "label": "totalSupply",
+  "type": "uint256",
+  "encoding": "inplace",
+  "bytes": 32
+ },
+ {
+  "slot": "119",
+  "offset": 0,
+  "label": "getEpochSnapshot",
+  "type": "mapping(uint256 => struct SFCStorageV1.EpochSnapshot)",
+  "encoding": "mapping",
+  "bytes": 32,
+  "key": {
+   "type": "uint256",
+   "encoding": "inplace",
+   "bytes": 32
+  },
+  "value": {
+   "type": "struct SFCStorageV1.EpochSnapshot",
+   "encoding": "inplace",
+   "bytes": 448,
+   "members": [
+    {
+     "slot": "0",
+     "offset": 0,
+     "label": "receivedStake",
+     "type": "mapping(uint256 => uint256)",
+     "encoding": "mapping",
+     "bytes": 32,
+     "key": {
+      "type": "uint256",
+      "encoding": "inplace",
+      "bytes": 32
+     },
+     "value": {
+      "type": "uint256",
+      "encoding": "inplace",
+      "bytes": 32
+     }
+    },
+    {
+     "slot": "1",
+     "offset": 0,
+     "label": "accumulatedRewardPerToken",
+     "type": "mapping(uint256 => uint256)",
+     "encoding": "mapping",
+     "bytes": 32,
+     "key": {
+      "type": "uint256",
+      "encoding": "inplace",
+      "bytes": 32
+     },
+     "value": {
+      "type": "uint256",
+      "encoding": "inplace",
+      "bytes": 32
+     }
+    },
+    {
+     "slot": "2",
+     "offset": 0,
+     "label": "accumulatedUptime",
+     "type": "mapping(uint256 => uint256)",
+     "encoding": "mapping",
+     "bytes": 32,
+     "key": {
+      "type": "uint256",
+      "encoding": "inplace",
+      "bytes": 32
+     },
+     "value": {
+      "type": "uint256",
+      "encoding": "inplace",
+      "bytes": 32
+     }
+    },
+    {
+     "slot": "3",
+     "offset": 0,
+     "label": "accumulatedOriginatedTxsFee",
+     "type": "mapping(uint256 => uint256)",
+     "encoding": "mapping",
+     "bytes": 32,
+     "key": {
+      "type": "uint256",
+      "encoding": "inplace",
+      "bytes": 32
+     },
+     "value": {
+      "type": "uint256",
+      "encoding": "inplace",
+      "bytes": 32
+     }
+    },
+    {
+     "slot": "4",
+     "offset": 0,
+     "label": "offlineTime",
+     "type": "mapping(uint256 => uint256)",
+     "encoding": "mapping",
+     "bytes": 32,
+     "key": {
+      "type": "uint256",
+      "encoding": "inplace",
+      "bytes": 32
+     },
+     "value": {
+      "type": "uint256",
+      "encoding": "inplace",
+      "bytes": 32
+     }
+    },
+    {
+     "slot": "5",
+     "offset": 0,
+     "label": "offlineBlocks",
+     "type": "mapping(uint256 => uint256)",
+     "encoding": "mapping",
+     "bytes": 32,
+     "key": {
+      "type": "uint256",
+      "encoding": "inplace",
+      "bytes": 32
+     },
+     "value": {
+      "type": "uint256",
+      "encoding": "inplace",
+      "bytes": 32
+     }
+    },
+    {
+     "slot": "6",
+     "offset": 0,
+     "label": "validatorIDs",
+     "type": "uint256[]",
+     "encoding": "dynamic_array",
+     "bytes": 32,
+     "base": {
+      "type": "uint256",
+      "encoding": "inplace",
+      "bytes": 32
+     }
+    },
+    {
+     "slot": "7",
+     "offset": 0,
+     "label": "endTime",
+     "type": "uint256",
+     "encoding": "inplace",
+     "bytes": 32
+    },
+    {
+     "slot": "8",
+     "offset": 0,
+     "label": "epochFee",
+     "type": "uint256",
+     "encoding": "inplace",
+     "bytes": 32
+    },
+    {
+     "slot": "9",
+     "offset": 0,
+     "label": "totalBaseRewardWeight",
+     "type": "uint256",
+     "encoding": "inplace",
+     "bytes": 32
+    },
+    {
+     "slot": "10",
+     "offset": 0,
+     "label": "totalTxRewardWeight",
+     "type": "uint256",
+     "encoding": "inplace",
+     "bytes": 32
+    },
+    {
+     "slot": "11",
+     "offset": 0,
+     "label": "baseRewardPerSecond",
+     "type": "uint256",
+     "encoding": "inplace",
+     "bytes": 32
+    },
+    {
+     "slot": "12",
+     "offset": 0,
+     "label": "totalStake",
+     "type": "uint256",
+     "encoding": "inplace",
+     "bytes": 32
+    },
+    {
+     "slot": "13",
+     "offset": 0,
+     "label": "totalSupply",
+     "type": "uint256",
+     "encoding": "inplace",
+     "bytes": 32
+    }
+   ]
+  }
+ },
+ {
+  "slot": "120",
+  "offset": 0,
+  "label": "__deprecated_offlinePenaltyThresholdBlocksNum",
+  "type": "uint256",
+  "encoding": "inplace",
+  "bytes": 32
+ },
+ {
+  "slot": "121",
+  "offset": 0,
+  "label": "__deprecated_offlinePenaltyThresholdTime",
+  "type": "uint256",
+  "encoding": "inplace",
+  "bytes": 32
+ },
+ {
+  "slot": "122",
+  "offset": 0,
+  "label": "slashingRefundRatio",
+  "type": "mapping(uint256 => uint256)",
+  "encoding": "mapping",
+  "bytes": 32,
+  "key": {
+   "type": "uint256",
+   "encoding": "inplace",
+   "bytes": 32
+  },
+  "value": {
+   "type": "uint256",
+   "encoding": "inplace",
+   "bytes": 32
+  }
+ },
+ {
+  "slot": "123",
+  "offset": 0,
+  "label": "__deprecated_stakeTokenizerAddress",
+  "type": "address",
+  "encoding": "inplace",
+  "bytes": 20
+ },
+ {
+  "slot": "124",
+  "offset": 0,
+  "label": "consts",
+  "type": "contract IConstantsManager",
+  "encoding": "inplace",
+  "bytes": 20
+ },
+ {
+  "slot": "125",
+  "offset": 0,
+  "label": "rewardsReserve",
+  "type": "contract IRewardsReserve",
+  "encoding": "inplace",
+  "bytes": 20
+ },
+ {
+  "slot": "126",
+  "offset": 0,
+  "label": "treasury",
+  "type": "address",
+  "encoding": "inplace",
+  "bytes": 20
+ },
+ {
+  "slot": "127",
+  "offset": 0,
+  "label": "insurancePool",
+  "type": "address",
+  "encoding": "inplace",
+  "bytes": 20
+ },
+ {
+  "slot": "128",
+  "offset": 0,
+  "label": "hostBonds",
+  "type": "contract IHostBonds",
+  "encoding": "inplace",
+  "bytes": 20
+ },
+ {
+  "slot": "129",
+  "offset": 0,
+  "label": "_reentrancyStatus",
+  "type": "uint256",
+  "encoding": "inplace",
+  "bytes": 32
+ },
+ {
+  "slot": "130",
+  "offset": 0,
+  "label": "genesisSealed",
+  "type": "bool",
+  "encoding": "inplace",
+  "bytes": 1
+ },
+ {
+  "slot": "131",
+  "offset": 0,
+  "label": "lastPubkeyUpdateEpoch",
+  "type": "mapping(uint256 => uint256)",
+  "encoding": "mapping",
+  "bytes": 32,
+  "key": {
+   "type": "uint256",
+   "encoding": "inplace",
+   "bytes": 32
+  },
+  "value": {
+   "type": "uint256",
+   "encoding": "inplace",
+   "bytes": 32
+  }
+ },
+ {
+  "slot": "132",
+  "offset": 0,
+  "label": "_rewardGaps",
+  "type": "mapping(uint256 => struct SFCStorageV2.RewardGap[])",
+  "encoding": "mapping",
+  "bytes": 32,
+  "key": {
+   "type": "uint256",
+   "encoding": "inplace",
+   "bytes": 32
+  },
+  "value": {
+   "type": "struct SFCStorageV2.RewardGap[]",
+   "encoding": "dynamic_array",
+   "bytes": 32,
+   "base": {
+    "type": "struct SFCStorageV2.RewardGap",
+    "encoding": "inplace",
+    "bytes": 96,
+    "members": [
+     {
+      "slot": "0",
+      "offset": 0,
+      "label": "fromEpoch",
+      "type": "uint256",
+      "encoding": "inplace",
+      "bytes": 32
+     },
+     {
+      "slot": "1",
+      "offset": 0,
+      "label": "toEpoch",
+      "type": "uint256",
+      "encoding": "inplace",
+      "bytes": 32
+     },
+     {
+      "slot": "2",
+      "offset": 0,
+      "label": "accumulatedRewardPerToken",
+      "type": "uint256",
+      "encoding": "inplace",
+      "bytes": 32
+     }
+    ]
+   }
+  }
+ },
+ {
+  "slot": "133",
+  "offset": 0,
+  "label": "excludedFromCirculation",
+  "type": "address[]",
+  "encoding": "dynamic_array",
+  "bytes": 32,
+  "base": {
+   "type": "address",
+   "encoding": "inplace",
+   "bytes": 20
+  }
+ },
+ {
+  "slot": "134",
+  "offset": 0,
+  "label": "totalMinted",
+  "type": "uint256",
+  "encoding": "inplace",
+  "bytes": 32
+ },
+ {
+  "slot": "135",
+  "offset": 0,
+  "label": "totalReserveDrawn",
+  "type": "uint256",
+  "encoding": "inplace",
+  "bytes": 32
+ },
+ {
+  "slot": "136",
+  "offset": 0,
+  "label": "__gap",
+  "type": "uint256[50]",
+  "encoding": "inplace",
+  "bytes": 1600,
+  "base": {
+   "type": "uint256",
+   "encoding": "inplace",
+   "bytes": 32
+  }
+ }
+]
