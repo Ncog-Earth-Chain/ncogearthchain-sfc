@@ -35,6 +35,7 @@ const SETTINGS = {
 //   abi:  interfaces, which have no code
 const TARGETS = [
     { file: 'contracts/sfc/ConstantsManager.sol', name: 'ConstantsManager', kind: 'full' },
+    { file: 'contracts/sfc/SFC.sol', name: 'SFC', kind: 'full' },
     { file: 'contracts/interfaces/ISFCNodeSurface.sol', name: 'ISFCNodeSurface', kind: 'abi' },
     { file: 'contracts/interfaces/INodeDriverAuth.sol', name: 'INodeDriverAuth', kind: 'abi' },
 ];
