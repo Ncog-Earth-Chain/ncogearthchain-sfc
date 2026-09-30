@@ -47,6 +47,15 @@ import {Decimal} from "../common/Decimal.sol";
  *   utilisationRewardShare          20%          [0, 50%]               1 pp       GOV-05b (initial = audit 3.4 rec.)
  *   offlinePenaltyThresholdTime     3 d          [1 d, 10 d]            -          audit SFC-8; bound = upstream, OPEN
  *   offlinePenaltyThresholdBlocksNum 1000        [100, 1,000,000]       1 block    audit SFC-8; bound = upstream, OPEN
+ *   doubleSignSelfSlashRatio        5%           [1%, 50%]              1 pp       audit 3.5 row 16 (design D6, OPEN)
+ *   doubleSignDelegationSlashRatio  1%           [0, 5%]                1 pp       audit 3.5 row 19 (D6; the 5% per-delegator cap is the bound)
+ *   confiscationReserveShare        50%          [0, 100%]              1 pp       audit 3.5 row 21 (D6; the rest goes to insurance)
+ *   maxSlashingRefundRatio          50%          [0, 50%]               1 pp       audit 3.5 (D6: refunds <= 50%)
+ *   emissionPerSecond (stub)        0.634196 NEC [0, 0.792745 NEC]      0.01 NEC   DECIDE-07/13 year-1 glide; bound = 2.5%/yr of 1e9 (ECO-01b replaces)
+ *
+ * The last five were appended by SFC v2 core (GOV-01b run 12) so that no economic figure of the SFC
+ * is a constant in its code: the slashing figures of design D6 and the emission stub's per-second
+ * budget are all governable here, inside their bounds, like every other parameter.
  *
  *   * "min step": the smallest move the rate limit always allows. 20% of 0 is 0, so a parameter
  *     whose hard floor is 0 (the sustainability share starts there) could otherwise never move;
@@ -106,7 +115,12 @@ contract ConstantsManager is Initializable, Ownable {
         SustainabilityShare, //          16
         UtilisationRewardShare, //       17
         OfflinePenaltyThresholdTime, //  18
-        OfflinePenaltyThresholdBlocksNum // 19
+        OfflinePenaltyThresholdBlocksNum, // 19
+        DoubleSignSelfSlashRatio, //     20
+        DoubleSignDelegationSlashRatio, // 21
+        ConfiscationReserveShare, //     22
+        MaxSlashingRefundRatio, //       23
+        EmissionPerSecond //             24
     }
 
     /// @dev One recorded change: when it happened and the value it replaced.
@@ -132,6 +146,11 @@ contract ConstantsManager is Initializable, Ownable {
 
     /// @dev One percentage point (Decimal).
     uint256 private constant PERCENT = 1e16;
+
+    /// @dev The emission stub's initial budget: 2% of 1e9 NEC a year (the year-1 glide of DECIDE-07/13)
+    /// per second, and its hard ceiling, 2.5% of 1e9 NEC a year (the code ceiling of design 7 step 3).
+    uint256 private constant EMISSION_YEAR1 = 634_195_839_675_291_730; // floor(20,000,000 NEC / 365 d)
+    uint256 private constant EMISSION_CEILING = 792_744_799_594_114_662; // floor(25,000,000 NEC / 365 d)
 
     uint256[64] private _values;
     mapping(Param => History) private _history;
@@ -166,6 +185,11 @@ contract ConstantsManager is Initializable, Ownable {
         _setInitial(Param.UtilisationRewardShare, 20 * PERCENT);
         _setInitial(Param.OfflinePenaltyThresholdTime, 3 days);
         _setInitial(Param.OfflinePenaltyThresholdBlocksNum, 1000);
+        _setInitial(Param.DoubleSignSelfSlashRatio, 5 * PERCENT);
+        _setInitial(Param.DoubleSignDelegationSlashRatio, 1 * PERCENT);
+        _setInitial(Param.ConfiscationReserveShare, 50 * PERCENT);
+        _setInitial(Param.MaxSlashingRefundRatio, 50 * PERCENT);
+        _setInitial(Param.EmissionPerSecond, EMISSION_YEAR1);
         _checkInvariants();
     }
 
@@ -254,6 +278,34 @@ contract ConstantsManager is Initializable, Ownable {
 
     function offlinePenaltyThresholdBlocksNum() external view returns (uint256) {
         return _values[uint256(Param.OfflinePenaltyThresholdBlocksNum)];
+    }
+
+    /// @notice The share of a double-signer's SELF-stake confiscated at fault time (design D6).
+    function doubleSignSelfSlashRatio() external view returns (uint256) {
+        return _values[uint256(Param.DoubleSignSelfSlashRatio)];
+    }
+
+    /// @notice The share of each DELEGATION to a double-signer confiscated when it exits (design D6).
+    /// Its hard bound, 5%, is the per-delegator cap.
+    function doubleSignDelegationSlashRatio() external view returns (uint256) {
+        return _values[uint256(Param.DoubleSignDelegationSlashRatio)];
+    }
+
+    /// @notice The share of every confiscation paid into the RewardsReserve; the rest goes to the
+    /// InsurancePool. Nothing is destroyed either way (DECIDE-25).
+    function confiscationReserveShare() external view returns (uint256) {
+        return _values[uint256(Param.ConfiscationReserveShare)];
+    }
+
+    /// @notice The highest slashing refund ratio the owner may grant a slashed validator (design D6).
+    function maxSlashingRefundRatio() external view returns (uint256) {
+        return _values[uint256(Param.MaxSlashingRefundRatio)];
+    }
+
+    /// @notice The emission stub's budget, NEC-wei per second, drawn from the RewardsReserve at every
+    /// epoch seal. ECO-01b's controller replaces the stub.
+    function emissionPerSecond() external view returns (uint256) {
+        return _values[uint256(Param.EmissionPerSecond)];
     }
 
     /// @notice Any parameter by identifier.
@@ -364,6 +416,26 @@ contract ConstantsManager is Initializable, Ownable {
         _update(Param.OfflinePenaltyThresholdBlocksNum, v);
     }
 
+    function updateDoubleSignSelfSlashRatio(uint256 v) external onlyOwner {
+        _update(Param.DoubleSignSelfSlashRatio, v);
+    }
+
+    function updateDoubleSignDelegationSlashRatio(uint256 v) external onlyOwner {
+        _update(Param.DoubleSignDelegationSlashRatio, v);
+    }
+
+    function updateConfiscationReserveShare(uint256 v) external onlyOwner {
+        _update(Param.ConfiscationReserveShare, v);
+    }
+
+    function updateMaxSlashingRefundRatio(uint256 v) external onlyOwner {
+        _update(Param.MaxSlashingRefundRatio, v);
+    }
+
+    function updateEmissionPerSecond(uint256 v) external onlyOwner {
+        _update(Param.EmissionPerSecond, v);
+    }
+
     // ------------------------------------------------------------------ internals
 
     /// @dev Hard bound and minimum step per parameter. The single source of every bound above.
@@ -387,8 +459,13 @@ contract ConstantsManager is Initializable, Ownable {
         if (p == Param.SustainabilityShare) return (0, 5 * PERCENT, PERCENT);
         if (p == Param.UtilisationRewardShare) return (0, 50 * PERCENT, PERCENT);
         if (p == Param.OfflinePenaltyThresholdTime) return (1 days, 10 days, 0);
-        // Param.OfflinePenaltyThresholdBlocksNum
-        return (100, 1_000_000, 1);
+        if (p == Param.OfflinePenaltyThresholdBlocksNum) return (100, 1_000_000, 1);
+        if (p == Param.DoubleSignSelfSlashRatio) return (PERCENT, 50 * PERCENT, PERCENT);
+        if (p == Param.DoubleSignDelegationSlashRatio) return (0, 5 * PERCENT, PERCENT);
+        if (p == Param.ConfiscationReserveShare) return (0, 100 * PERCENT, PERCENT);
+        if (p == Param.MaxSlashingRefundRatio) return (0, 50 * PERCENT, PERCENT);
+        // Param.EmissionPerSecond
+        return (0, EMISSION_CEILING, PERCENT);
     }
 
     function _setInitial(Param p, uint256 v) private {
