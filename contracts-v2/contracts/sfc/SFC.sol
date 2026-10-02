@@ -106,6 +106,7 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
     error NotEnoughTimePassed();
     error NotEnoughUnlockedStake();
     error NotExcluded();
+    error V1RewardsSettled();
     error NotLockedUp();
     error NotOffline();
     error NotRewardsReserve();
@@ -142,6 +143,7 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
     event UpdatedModule(bytes32 indexed module, address addr);
     event ExcludedFromCirculation(address indexed vault);
     event IncludedInCirculation(address indexed vault);
+    event MintedV1Rewards(uint256 amount);
 
     modifier onlyDriver() {
         if (msg.sender != address(node)) revert NotDriver();
@@ -533,6 +535,21 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
             }
         }
         revert NotExcluded();
+    }
+
+    /// @notice Mints the rewards v1 accrued and never minted (v1 minted at claim; v2 pays a claim from
+    /// what the SFC holds), so that every claim after the swap is paid in full and no staker's stake
+    /// pays another's reward (owner ruling 11, 2026-10-02). Once, and only before v2 seals an epoch,
+    /// so what it covers is v1's accrual alone; on the upgrade path only the installer can reach it
+    /// (it holds the ownership for that one transaction, and a Timelock operation takes longer than
+    /// an epoch). The installer computes `amount` in the same transaction from pendingRewards over
+    /// every delegation, checked to hold the whole of totalStake (contracts/SFCv2Installer.sol). The
+    /// ceiling is a code bound against a wrong amount: 5% of the supply.
+    function mintV1Rewards(uint256 amount) external onlyOwner {
+        if (v1RewardsSettled || genesisSealed || amount > totalSupply / 20) revert V1RewardsSettled();
+        v1RewardsSettled = true;
+        _mint(amount);
+        emit MintedV1Rewards(amount);
     }
 
     // ================================================================ views

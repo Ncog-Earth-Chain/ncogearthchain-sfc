@@ -909,10 +909,18 @@
  {
   "slot": "136",
   "offset": 0,
-  "label": "__gap",
-  "type": "uint256[50]",
+  "label": "v1RewardsSettled",
+  "type": "bool",
   "encoding": "inplace",
-  "bytes": 1600,
+  "bytes": 1
+ },
+ {
+  "slot": "137",
+  "offset": 0,
+  "label": "__gap",
+  "type": "uint256[49]",
+  "encoding": "inplace",
+  "bytes": 1568,
   "base": {
    "type": "uint256",
    "encoding": "inplace",

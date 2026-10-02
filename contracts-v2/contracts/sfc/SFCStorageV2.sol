@@ -50,6 +50,8 @@ abstract contract SFCStorageV2 {
     uint256 public totalMinted;
     // slot 135: NEC drawn from the RewardsReserve (supply-neutral)
     uint256 public totalReserveDrawn;
-    // slots 136..185: reserved headroom, used from the front
-    uint256[50] private __gap;
+    // slot 136: v1's accrued, never-minted rewards have been minted (mintV1Rewards; owner ruling 11)
+    bool public v1RewardsSettled;
+    // slots 137..185: reserved headroom, used from the front
+    uint256[49] private __gap;
 }
