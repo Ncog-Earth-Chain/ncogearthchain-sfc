@@ -44,12 +44,14 @@ abstract contract SFCStorageV2 {
     mapping(uint256 => uint256) public lastPubkeyUpdateEpoch;
     // slot 132: validator ID -> its reward-index gaps, oldest first (D9)
     mapping(uint256 => RewardGap[]) internal _rewardGaps;
-    // slot 133: vaults excluded from circulatingSupply() (ECO-01a; the view arrives with UPG-00)
+    // slot 133: vaults excluded from circulatingSupply() (ECO-01a; design 11 item 4)
     address[] public excludedFromCirculation;
     // slot 134: NEC minted by the tail (_mint), the only path that moves totalSupply after genesis
     uint256 public totalMinted;
     // slot 135: NEC drawn from the RewardsReserve (supply-neutral)
     uint256 public totalReserveDrawn;
-    // slots 136..185: reserved headroom, used from the front
-    uint256[50] private __gap;
+    // slot 136: v1's accrued, never-minted rewards have been minted (mintV1Rewards; owner ruling 11)
+    bool public v1RewardsSettled;
+    // slots 137..185: reserved headroom, used from the front
+    uint256[49] private __gap;
 }
