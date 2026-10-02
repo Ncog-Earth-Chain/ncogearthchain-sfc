@@ -44,7 +44,7 @@ abstract contract SFCStorageV2 {
     mapping(uint256 => uint256) public lastPubkeyUpdateEpoch;
     // slot 132: validator ID -> its reward-index gaps, oldest first (D9)
     mapping(uint256 => RewardGap[]) internal _rewardGaps;
-    // slot 133: vaults excluded from circulatingSupply() (ECO-01a; the view arrives with UPG-00)
+    // slot 133: vaults excluded from circulatingSupply() (ECO-01a; design 11 item 4)
     address[] public excludedFromCirculation;
     // slot 134: NEC minted by the tail (_mint), the only path that moves totalSupply after genesis
     uint256 public totalMinted;
