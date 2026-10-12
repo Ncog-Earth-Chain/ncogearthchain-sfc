@@ -493,12 +493,10 @@ contract ConstantsManager is Initializable, Ownable {
 
     function updateEmissionPerSecond(uint256 v) external onlyOwner {
         _update(Param.EmissionPerSecond, v);
-        _checkInvariants();
     }
 
     function updateEmissionFloorRate(uint256 v) external onlyOwner {
         _update(Param.EmissionFloorRate, v);
-        _checkInvariants();
     }
 
     function updateEmissionGlideDuration(uint256 v) external onlyOwner {
@@ -629,10 +627,6 @@ contract ConstantsManager is Initializable, Ownable {
             _values[uint256(Param.MinLockupDuration)] <= _values[uint256(Param.MaxLockupDuration)],
             "ConstantsManager: min lockup exceeds max lockup"
         );
-        require(
-            _values[uint256(Param.EmissionFloorRate)] <= _values[uint256(Param.EmissionPerSecond)],
-            "ConstantsManager: the glide's end rate exceeds its start rate"
-        );
     }
 
     // ------------------------------------------------------------- the emission controller (ECO-01b)
@@ -658,7 +652,11 @@ contract ConstantsManager is Initializable, Ownable {
         uint256 start = _values[uint256(Param.EmissionPerSecond)];
         uint256 end = _values[uint256(Param.EmissionFloorRate)];
         uint256 glide = _values[uint256(Param.EmissionGlideDuration)];
-        if (elapsed >= glide) {
+        // `start <= end` is not an invariant of the parameters: both ends are bounded by the same
+        // code ceiling and either may be set anywhere inside it, so the arithmetic is guarded here
+        // rather than in a setter. A rate that would glide UPWARDS simply starts at its end value;
+        // what must never happen is a revert, which would revert the SFC's sealEpoch.
+        if (elapsed >= glide || start <= end) {
             return end;
         }
         return start - ((start - end) * elapsed) / glide;
