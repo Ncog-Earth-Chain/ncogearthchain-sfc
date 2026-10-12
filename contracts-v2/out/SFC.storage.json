@@ -917,10 +917,36 @@
  {
   "slot": "137",
   "offset": 0,
-  "label": "__gap",
-  "type": "uint256[49]",
+  "label": "emissionStartTime",
+  "type": "uint256",
   "encoding": "inplace",
-  "bytes": 1568,
+  "bytes": 32
+ },
+ {
+  "slot": "138",
+  "offset": 0,
+  "label": "_lockBonusWeight",
+  "type": "mapping(uint256 => uint256)",
+  "encoding": "mapping",
+  "bytes": 32,
+  "key": {
+   "type": "uint256",
+   "encoding": "inplace",
+   "bytes": 32
+  },
+  "value": {
+   "type": "uint256",
+   "encoding": "inplace",
+   "bytes": 32
+  }
+ },
+ {
+  "slot": "139",
+  "offset": 0,
+  "label": "__gap",
+  "type": "uint256[47]",
+  "encoding": "inplace",
+  "bytes": 1504,
   "base": {
    "type": "uint256",
    "encoding": "inplace",

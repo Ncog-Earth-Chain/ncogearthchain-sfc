@@ -51,11 +51,18 @@ import {Decimal} from "../common/Decimal.sol";
  *   doubleSignDelegationSlashRatio  1%           [0, 5%]                1 pp       audit 3.5 row 19 (D6; the 5% per-delegator cap is the bound)
  *   confiscationReserveShare        50%          [0, 100%]              1 pp       audit 3.5 row 21 (D6; the rest goes to insurance)
  *   maxSlashingRefundRatio          50%          [0, 50%]               1 pp       audit 3.5 (D6: refunds <= 50%)
- *   emissionPerSecond (stub)        0.634196 NEC [0, 0.792745 NEC]      0.01 NEC   DECIDE-07/13 year-1 glide; bound = 2.5%/yr of 1e9 (ECO-01b replaces)
+ *   emissionPerSecond (glide start) 0.634196 NEC [0, 0.792745 NEC]      0.01 NEC   DECIDE-07/13 year-1 glide; bound = the 2.5%/yr code ceiling on 1e9
+ *   emissionFloorRate (glide end)   0.317098 NEC [0, 0.792745 NEC]      0.01 NEC   DECIDE-07 1.0%/yr of 1e9; bound = the same code ceiling
+ *   emissionGlideDuration           8 x 365 d    [365 d, 7300 d]        1 d        DECIDE-07 (2.0% -> 1.0% over 8 years, then flat)
+ *   tailEmissionRate                1%           [0.25%, 1.5%]          -          DECIDE-07/25 (per year of LIVE supply, once the reserve is empty)
+ *   maxApy                          15%          [5%, 30%]              -          DECIDE-13 (the cap while stake is small)
+ *   lockupBonusMultiplier           1.5x         [1.0x, 2.0x]           -          DECIDE-13 (redistributes within the budget, never above it)
  *
- * The last five were appended by SFC v2 core (GOV-01b run 12) so that no economic figure of the SFC
- * is a constant in its code: the slashing figures of design D6 and the emission stub's per-second
- * budget are all governable here, inside their bounds, like every other parameter.
+ * The slashing figures and the emission rate were appended by SFC v2 core (GOV-01b run 12) so that
+ * no economic figure of the SFC is a constant in its code: the figures of design D6 and the
+ * per-second emission budget are all governable here, inside their bounds, like every other
+ * parameter. ECO-01b appended the last five (design 7 step 3) and moved the emission math itself
+ * here -- see `epochEmissionBudget` at the end of this contract.
  *
  *   * "min step": the smallest move the rate limit always allows. 20% of 0 is 0, so a parameter
  *     whose hard floor is 0 (the sustainability share starts there) could otherwise never move;
@@ -120,7 +127,12 @@ contract ConstantsManager is Initializable, Ownable {
         DoubleSignDelegationSlashRatio, // 21
         ConfiscationReserveShare, //     22
         MaxSlashingRefundRatio, //       23
-        EmissionPerSecond //             24
+        EmissionPerSecond, //            24 (ECO-01b: the GLIDE'S START rate, not a fixed budget)
+        EmissionFloorRate, //            25 the glide's end rate
+        EmissionGlideDuration, //        26 how long the glide takes to reach it
+        TailEmissionRate, //             27 per year of live supply, once the reserve is empty
+        MaxApy, //                       28
+        LockupBonusMultiplier //         29
     }
 
     /// @dev One recorded change: when it happened and the value it replaced.
@@ -147,10 +159,21 @@ contract ConstantsManager is Initializable, Ownable {
     /// @dev One percentage point (Decimal).
     uint256 private constant PERCENT = 1e16;
 
-    /// @dev The emission stub's initial budget: 2% of 1e9 NEC a year (the year-1 glide of DECIDE-07/13)
-    /// per second, and its hard ceiling, 2.5% of 1e9 NEC a year (the code ceiling of design 7 step 3).
+    /// @dev The glide's two ends: 2% of 1e9 NEC a year in year 1 and 1% of 1e9 NEC a year at the end
+    /// of the glide (DECIDE-07's ratified 2.0% -> 1.0%), per second; and the hard ceiling both are
+    /// bounded by, 2.5% of 1e9 NEC a year (the CODE CEILING of design 7 step 3).
     uint256 private constant EMISSION_YEAR1 = 634_195_839_675_291_730; // floor(20,000,000 NEC / 365 d)
+    uint256 private constant EMISSION_FLOOR = 317_097_919_837_645_865; // floor(10,000,000 NEC / 365 d)
     uint256 private constant EMISSION_CEILING = 792_744_799_594_114_662; // floor(25,000,000 NEC / 365 d)
+
+    /// @dev One year, the denominator of every annual rate here.
+    uint256 private constant YEAR = 365 days;
+
+    /// @notice The CODE CEILING of DECIDE-07: no epoch's emission budget may exceed 2.5% a year of
+    /// live supply, whatever the parameters say. It is a constant, not a parameter: widening it is a
+    /// change to this contract's code, which is the Timelock's 72 h class (design 4), and it is the
+    /// hard upper bound of both glide rates as well (`_spec`).
+    uint256 public constant EMISSION_CODE_CEILING = 2.5e16; // 2.5%
 
     uint256[64] private _values;
     mapping(Param => History) private _history;
@@ -190,6 +213,11 @@ contract ConstantsManager is Initializable, Ownable {
         _setInitial(Param.ConfiscationReserveShare, 50 * PERCENT);
         _setInitial(Param.MaxSlashingRefundRatio, 50 * PERCENT);
         _setInitial(Param.EmissionPerSecond, EMISSION_YEAR1);
+        _setInitial(Param.EmissionFloorRate, EMISSION_FLOOR);
+        _setInitial(Param.EmissionGlideDuration, 8 * YEAR);
+        _setInitial(Param.TailEmissionRate, 1 * PERCENT);
+        _setInitial(Param.MaxApy, 15 * PERCENT);
+        _setInitial(Param.LockupBonusMultiplier, 1.5e18);
         _checkInvariants();
     }
 
@@ -302,10 +330,41 @@ contract ConstantsManager is Initializable, Ownable {
         return _values[uint256(Param.MaxSlashingRefundRatio)];
     }
 
-    /// @notice The emission stub's budget, NEC-wei per second, drawn from the RewardsReserve at every
-    /// epoch seal. ECO-01b's controller replaces the stub.
+    /// @notice The GLIDE'S START rate, NEC-wei per second: DECIDE-07's year-1 budget, 2% a year of the
+    /// fixed 1e9 base. The budget an epoch actually gets is `epochEmissionBudget`, which glides from
+    /// here to `emissionFloorRate`; the v1 selector is kept (the SFC's `baseRewardPerSecond()`).
     function emissionPerSecond() external view returns (uint256) {
         return _values[uint256(Param.EmissionPerSecond)];
+    }
+
+    /// @notice The GLIDE'S END rate, NEC-wei per second: DECIDE-07's 1% a year of the fixed 1e9 base.
+    function emissionFloorRate() external view returns (uint256) {
+        return _values[uint256(Param.EmissionFloorRate)];
+    }
+
+    /// @notice How long the glide takes to walk from `emissionPerSecond` to `emissionFloorRate`
+    /// (DECIDE-07: 8 years, after which it is flat until the reserve empties, ~17.6 years in).
+    function emissionGlideDuration() external view returns (uint256) {
+        return _values[uint256(Param.EmissionGlideDuration)];
+    }
+
+    /// @notice The TAIL rate: once the RewardsReserve is empty, emission is minted at this fraction of
+    /// LIVE supply a year (DECIDE-07/-25: the only mechanism that ever moves totalSupply).
+    function tailEmissionRate() external view returns (uint256) {
+        return _values[uint256(Param.TailEmissionRate)];
+    }
+
+    /// @notice The cap on an epoch's emission as an annual yield on total stake (DECIDE-13: 15% while
+    /// stake is small, so a tiny validator set cannot be paid the whole glide).
+    function maxApy() external view returns (uint256) {
+        return _values[uint256(Param.MaxApy)];
+    }
+
+    /// @notice The lock multiplier's maximum (DECIDE-13: 1.5x at the longest lockup). It
+    /// REDISTRIBUTES the epoch's budget, never raises it: the SFC divides the epoch's reward index by
+    /// the lock-weighted stake, so the epoch's total payout is the budget at any lock participation.
+    function lockupBonusMultiplier() external view returns (uint256) {
+        return _values[uint256(Param.LockupBonusMultiplier)];
     }
 
     /// @notice Any parameter by identifier.
@@ -434,6 +493,28 @@ contract ConstantsManager is Initializable, Ownable {
 
     function updateEmissionPerSecond(uint256 v) external onlyOwner {
         _update(Param.EmissionPerSecond, v);
+        _checkInvariants();
+    }
+
+    function updateEmissionFloorRate(uint256 v) external onlyOwner {
+        _update(Param.EmissionFloorRate, v);
+        _checkInvariants();
+    }
+
+    function updateEmissionGlideDuration(uint256 v) external onlyOwner {
+        _update(Param.EmissionGlideDuration, v);
+    }
+
+    function updateTailEmissionRate(uint256 v) external onlyOwner {
+        _update(Param.TailEmissionRate, v);
+    }
+
+    function updateMaxApy(uint256 v) external onlyOwner {
+        _update(Param.MaxApy, v);
+    }
+
+    function updateLockupBonusMultiplier(uint256 v) external onlyOwner {
+        _update(Param.LockupBonusMultiplier, v);
     }
 
     // ------------------------------------------------------------------ internals
@@ -464,8 +545,15 @@ contract ConstantsManager is Initializable, Ownable {
         if (p == Param.DoubleSignDelegationSlashRatio) return (0, 5 * PERCENT, PERCENT);
         if (p == Param.ConfiscationReserveShare) return (0, 100 * PERCENT, PERCENT);
         if (p == Param.MaxSlashingRefundRatio) return (0, 50 * PERCENT, PERCENT);
-        // Param.EmissionPerSecond
-        return (0, EMISSION_CEILING, PERCENT);
+        // Both glide rates are bounded by the 2.5%/yr code ceiling on the fixed 1e9 base: no
+        // Timelock operation can raise emission above it (ECO-01b, plan mutant (i)).
+        if (p == Param.EmissionPerSecond) return (0, EMISSION_CEILING, PERCENT);
+        if (p == Param.EmissionFloorRate) return (0, EMISSION_CEILING, PERCENT);
+        if (p == Param.EmissionGlideDuration) return (YEAR, 20 * YEAR, 1 days);
+        if (p == Param.TailEmissionRate) return (PERCENT / 4, (3 * PERCENT) / 2, 0);
+        if (p == Param.MaxApy) return (5 * PERCENT, 30 * PERCENT, 0);
+        // Param.LockupBonusMultiplier
+        return (Decimal.unit(), 2 * Decimal.unit(), 0);
     }
 
     function _setInitial(Param p, uint256 v) private {
@@ -541,5 +629,68 @@ contract ConstantsManager is Initializable, Ownable {
             _values[uint256(Param.MinLockupDuration)] <= _values[uint256(Param.MaxLockupDuration)],
             "ConstantsManager: min lockup exceeds max lockup"
         );
+        require(
+            _values[uint256(Param.EmissionFloorRate)] <= _values[uint256(Param.EmissionPerSecond)],
+            "ConstantsManager: the glide's end rate exceeds its start rate"
+        );
+    }
+
+    // ------------------------------------------------------------- the emission controller (ECO-01b)
+
+    /**
+     * @notice The emission rate, NEC-wei per second, at `elapsed` seconds since emission started
+     * (DECIDE-07, design 7 step 3). Two phases and ONE deterministic switch between them:
+     *
+     *  - while the RewardsReserve holds anything, the GLIDE, measured on the fixed 1e9 base: the rate
+     *    walks linearly from `emissionPerSecond` (2%/yr) to `emissionFloorRate` (1%/yr) over
+     *    `emissionGlideDuration`, then stays there. Every NEC of it is DRAWN from the reserve, so
+     *    totalSupply does not move (DECIDE-25);
+     *  - once the reserve is empty, the TAIL: `tailEmissionRate` a year of LIVE supply, minted. This
+     *    is the only mechanism by which supply can ever change, and it exists from day one.
+     *
+     * The switch is `reserveBalance == 0`, which the SFC reads at the seal, so the phase is a function
+     * of state and not of a stored flag that could disagree with it.
+     */
+    function emissionRatePerSecond(uint256 elapsed, uint256 liveSupply, uint256 reserveBalance) public view returns (uint256) {
+        if (reserveBalance == 0) {
+            return (_values[uint256(Param.TailEmissionRate)] * liveSupply) / (Decimal.unit() * YEAR);
+        }
+        uint256 start = _values[uint256(Param.EmissionPerSecond)];
+        uint256 end = _values[uint256(Param.EmissionFloorRate)];
+        uint256 glide = _values[uint256(Param.EmissionGlideDuration)];
+        if (elapsed >= glide) {
+            return end;
+        }
+        return start - ((start - end) * elapsed) / glide;
+    }
+
+    /**
+     * @notice An epoch's whole emission budget: the rate above over the epoch's seconds, under both
+     * caps DECIDE-07/13 require.
+     *
+     *  - `maxApy` x `totalStake`, prorated: while stake is small the glide would be an absurd yield,
+     *    and the cap, not the glide, is what gets paid;
+     *  - `EMISSION_CODE_CEILING` x `liveSupply`, prorated: 2.5% a year, a constant of this code that
+     *    no parameter can cross.
+     *
+     * It is a view: the SFC decides how to fund the budget (reserve first, then mint) and the caller
+     * passes the state it is measured on, so nothing here keeps a second copy of the chain's numbers.
+     */
+    function epochEmissionBudget(
+        uint256 elapsed,
+        uint256 epochDuration,
+        uint256 totalStake,
+        uint256 liveSupply,
+        uint256 reserveBalance
+    ) external view returns (uint256 budget) {
+        budget = emissionRatePerSecond(elapsed, liveSupply, reserveBalance) * epochDuration;
+        uint256 apyCap = (_values[uint256(Param.MaxApy)] * totalStake * epochDuration) / (Decimal.unit() * YEAR);
+        if (budget > apyCap) {
+            budget = apyCap;
+        }
+        uint256 ceiling = (EMISSION_CODE_CEILING * liveSupply * epochDuration) / (Decimal.unit() * YEAR);
+        if (budget > ceiling) {
+            budget = ceiling;
+        }
     }
 }
