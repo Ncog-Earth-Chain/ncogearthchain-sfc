@@ -29,9 +29,12 @@ import {SFCStorageV2} from "./SFCStorageV2.sol";
  * WHAT IT FIXES (1, table F1..F14)
  *  - F1 the supply ledger: claims pay NEC the SFC already holds and never mint; the only mint is
  *    _mint, which moves totalSupply;
- *  - F2 emission is drawn from the RewardsReserve (supply-neutral). This is the fixed-budget STUB:
- *    ConstantsManager.emissionPerSecond() x the epoch's duration, while the reserve holds it; ECO-01b
- *    brings the glide controller and the tail mint;
+ *  - F2 emission is the ECO-01b CONTROLLER: the epoch's budget is ConstantsManager
+ *    .epochEmissionBudget (the 2.0% -> 1.0% glide while the reserve holds anything, the tail on live
+ *    supply once it does not, under the maxApy cap and the 2.5%/yr code ceiling), DRAWN from the
+ *    RewardsReserve as far as it reaches and MINTED for the rest -- one controller with one
+ *    deterministic switch and no double pay at the boundary. The lock multiplier REDISTRIBUTES that
+ *    budget (DECIDE-13), it never raises it;
  *  - F3 the fee split: 100% of the epoch's gas fees is re-credited and split validators / reserve /
  *    treasury; nothing is destroyed (DECIDE-25);
  *  - F4 every economic figure is read from the ConstantsManager when it is applied. There is no
@@ -85,6 +88,7 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
     uint8 internal constant P_CONFISCATION_RESERVE_SHARE = 22;
     uint8 internal constant P_MAX_SLASHING_REFUND_RATIO = 23;
     uint8 internal constant P_EMISSION_PER_SECOND = 24;
+    uint8 internal constant P_LOCKUP_BONUS_MULTIPLIER = 29;
 
     // Errors. Custom errors, not strings: EIP-170 leaves the core no room for revert strings.
     error AlreadyExcluded();
@@ -178,6 +182,7 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         currentSealedEpoch = sealedEpoch;
         node = INodeDriverAuth(nodeDriver);
         totalSupply = _totalSupply;
+        emissionStartTime = block.timestamp;
         getEpochSnapshot[sealedEpoch].endTime = block.timestamp;
     }
 
@@ -193,6 +198,7 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         rewardsReserve = IRewardsReserve(_contract(reserve_));
         treasury = _contract(treasury_);
         insurancePool = _contract(insurancePool_);
+        emissionStartTime = block.timestamp;
     }
 
     // ================================================================ node-facing (driver)
@@ -246,6 +252,7 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
             ld.fromEpoch = lockupFromEpoch;
             ld.endTime = lockupEndTime;
             ld.duration = lockupDuration;
+            _reweighLockup(toValidatorID, 0, lockedStake * lockupDuration);
             getStashedLockupRewards[delegator][toValidatorID].lockupExtraReward = earlyUnlockPenalty;
             emit LockedUpStake(delegator, toValidatorID, lockupDuration, lockedStake);
         }
@@ -468,6 +475,7 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         }
 
         ld.lockedStake = lockedStake - amount;
+        _reweighLockup(toValidatorID, amount * ld.duration, 0);
         if (penalty != 0) {
             _rawUndelegate(delegator, toValidatorID, penalty);
             _payReserve(penalty);
@@ -873,10 +881,14 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         // checked after _stashRewards, which has erased a previous lockup that has already ended
         LockedDelegation storage ld = getLockupInfo[delegator][toValidatorID];
         if (lockupDuration < ld.duration) revert LockupDurationDecreases();
+        uint256 weighedBefore = ld.lockedStake * ld.duration;
         ld.lockedStake += amount;
         ld.fromEpoch = currentEpoch();
         ld.endTime = endTime;
         ld.duration = lockupDuration;
+        // the whole lockup is re-weighed, not only the added amount: relocking for longer raises the
+        // multiplier on the stake that was already locked (ECO-01b)
+        _reweighLockup(toValidatorID, weighedBefore, ld.lockedStake * lockupDuration);
         emit LockedUpStake(delegator, toValidatorID, lockupDuration, amount);
     }
 
@@ -952,6 +964,11 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         _rewardsStash[delegator][toValidatorID] = _sum(_rewardsStash[delegator][toValidatorID], nonStashedReward);
         getStashedLockupRewards[delegator][toValidatorID] = _sum(getStashedLockupRewards[delegator][toValidatorID], nonStashedReward);
         if (!isLockedUp(delegator, toValidatorID)) {
+            // the lockup is gone, and so is its share of the lock-bonus weight: this is the one path
+            // that applies an EXPIRY to the weight, so every path that touches a delegation goes
+            // through it (ECO-01b)
+            LockedDelegation storage ended = getLockupInfo[delegator][toValidatorID];
+            _reweighLockup(toValidatorID, ended.lockedStake * ended.duration, 0);
             delete getLockupInfo[delegator][toValidatorID];
             delete getStashedLockupRewards[delegator][toValidatorID];
         }
@@ -992,16 +1009,31 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         return r == 0 ? 0 : r - 1;
     }
 
-    function _scaleLockupReward(uint256 fullReward, uint256 lockupDuration) internal view returns (Rewards memory reward) {
-        uint256 unlockedRatio = _c(P_UNLOCKED_REWARD_RATIO);
-        if (lockupDuration != 0) {
-            uint256 lockupExtraRatio = ((Decimal.unit() - unlockedRatio) * lockupDuration) / _c(P_MAX_LOCKUP_DURATION);
-            uint256 totalScaledReward = (fullReward * (unlockedRatio + lockupExtraRatio)) / Decimal.unit();
-            reward.lockupBaseReward = (fullReward * unlockedRatio) / Decimal.unit();
-            reward.lockupExtraReward = totalScaledReward - reward.lockupBaseReward;
-        } else {
-            reward.unlockedReward = (fullReward * unlockedRatio) / Decimal.unit();
-        }
+    /// @dev ECO-01b (DECIDE-13). THE LOCK BONUS: `(lockupBonusMultiplier - 1) x amount x duration /
+    /// maxLockupDuration`, so a maximum-duration lockup earns the full bonus on top of its 1x and a
+    /// shorter one earns it prorated. v1 instead paid unlocked stake only `unlockedRewardRatio` of its
+    /// reward and left the rest unpaid, so what an epoch paid out depended on how much stake happened
+    /// to be locked. The budget is REDISTRIBUTED now, not scaled: this is the same function
+    /// _lockWeightedStake charges the epoch's pool with, so the epoch's total payout is its budget at
+    /// any lock participation (plan mutant (ii)).
+    function _lockBonus(uint256 amount, uint256 duration) internal view returns (uint256) {
+        return ((_c(P_LOCKUP_BONUS_MULTIPLIER) - Decimal.unit()) * amount * duration) / (Decimal.unit() * _c(P_MAX_LOCKUP_DURATION));
+    }
+
+    /// @dev Moves `removed` out of the validator's lock-bonus weight and `added` into it. Every path
+    /// that changes a lockup goes through here, so the weight the epoch's reward index is divided by
+    /// is always the weight the claims will multiply by.
+    function _reweighLockup(uint256 validatorID, uint256 removed, uint256 added) internal {
+        _lockBonusWeight[validatorID] = _lockBonusWeight[validatorID] + added - removed;
+    }
+
+    /// @dev The validator's stake with the lock bonus folded in: receivedStake plus the bonus on its
+    /// lock-bonus weight (a sum of lockedStake x lockupDuration, so the duration is already in it and
+    /// `_lockBonus(weight, 1)` is the right call). This is the denominator that makes an epoch's
+    /// payout equal its budget: it charges the pool, through the SAME _lockBonus the claims are paid
+    /// by, for every wei of bonus they will take.
+    function _lockWeightedStake(uint256 validatorID) internal view returns (uint256) {
+        return getValidator[validatorID].receivedStake + _lockBonus(_lockBonusWeight[validatorID], 1);
     }
 
     function _sum(Rewards memory a, Rewards memory b) internal pure returns (Rewards memory) {
@@ -1021,11 +1053,13 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         LockedDelegation storage ld = getLockupInfo[delegator][toValidatorID];
         uint256 wholeStake = getStake[delegator][toValidatorID];
         uint256 unlockedStake = wholeStake - ld.lockedStake;
-        // locked stake during lockup epochs, unlocked stake during lockup epochs, the whole stake after
-        Rewards memory plReward = _scaleLockupReward(_newRewardsOf(ld.lockedStake, toValidatorID, stashedUntil, lockedUntil), ld.duration);
-        Rewards memory puReward = _scaleLockupReward(_newRewardsOf(unlockedStake, toValidatorID, stashedUntil, lockedUntil), 0);
-        Rewards memory wuReward = _scaleLockupReward(_newRewardsOf(wholeStake, toValidatorID, lockedUntil, payableUntil), 0);
-        return _sum(_sum(plReward, puReward), wuReward);
+        // locked stake during lockup epochs, unlocked stake during lockup epochs, the whole stake
+        // after. Only the first earns the lock bonus, and the bonus is the only part the early-unlock
+        // penalty takes in full (F6).
+        uint256 locked = _newRewardsOf(ld.lockedStake, toValidatorID, stashedUntil, lockedUntil);
+        uint256 unlocked = _newRewardsOf(unlockedStake, toValidatorID, stashedUntil, lockedUntil) +
+            _newRewardsOf(wholeStake, toValidatorID, lockedUntil, payableUntil);
+        return Rewards(_lockBonus(locked, ld.duration), locked, unlocked);
     }
 
     function _newRewardsOf(uint256 stakeAmount, uint256 toValidatorID, uint256 fromEpoch, uint256 toEpoch) internal view returns (uint256) {
@@ -1194,29 +1228,46 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         emit SplitEpochFees(currentEpoch(), toValidators, toReserve, toTreasury, sustainability);
     }
 
-    /// @dev Design 7 step 3, as the fixed-budget STUB: emissionPerSecond x the epoch's duration, drawn
-    /// from the RewardsReserve (supply-neutral) as far as it holds, split into the base track and the
-    /// utilisation track (utilisationRewardShare, weighted by originated fees). Nothing is drawn when no
-    /// validator has any weight to receive it. ECO-01b replaces this with the glide controller and the
-    /// tail mint.
+    /// @dev Design 7 step 3: THE EMISSION CONTROLLER (ECO-01b). The ConstantsManager computes the
+    /// epoch's whole budget -- the 2.0% -> 1.0% glide while the reserve holds anything, the tail on
+    /// live supply once it does not, under the maxApy cap and the 2.5%/yr code ceiling -- and this is
+    /// the one place that FUNDS it: drawn from the RewardsReserve as far as the reserve reaches,
+    /// minted for the rest.
+    ///
+    /// One controller, one deterministic switch. The epoch that empties the reserve draws exactly what
+    /// is left and mints exactly the remainder OF THE SAME BUDGET, so the boundary pays the budget
+    /// once and never twice; from the next epoch the reserve reads empty and the rate is the tail's.
+    /// The budget splits into the base track and the utilisation track (utilisationRewardShare,
+    /// weighted by originated fees). Nothing is emitted when no validator has weight to take it.
     function _drawEmission(SealCtx memory ctx) internal {
-        if (address(rewardsReserve) == address(0) || (ctx.totalBaseRewardWeight == 0 && ctx.totalTxRewardWeight == 0)) {
+        if (
+            address(consts) == address(0) ||
+            address(rewardsReserve) == address(0) ||
+            (ctx.totalBaseRewardWeight == 0 && ctx.totalTxRewardWeight == 0)
+        ) {
             _poolsForWeights(ctx);
             return;
         }
-        uint256 budget = _emissionPerSecond() * ctx.epochDuration;
         uint256 available = address(rewardsReserve).balance;
-        if (budget > available) {
-            budget = available;
-        }
-        // a reserve that refuses the draw pays nothing this epoch; sealEpoch must not revert
-        if (budget != 0) {
-            try rewardsReserve.draw(budget) {} catch {
-                budget = 0;
+        uint256 budget = consts.epochEmissionBudget(block.timestamp - emissionStartTime, ctx.epochDuration, totalStake, totalSupply, available);
+        uint256 fromReserve = budget < available ? budget : available;
+        // a reserve that refuses the draw pays only the minted part: sealEpoch must not revert, so the
+        // draw goes out as a low-level call, the same way _payReserve pays in
+        if (fromReserve != 0) {
+    try rewardsReserve.draw(fromReserve) {
+                totalReserveDrawn += fromReserve;
+            } catch {
+                budget -= fromReserve;
+                fromReserve = 0;
             }
         }
+        if (budget > fromReserve) {
+            // the tail: the only path that moves totalSupply (DECIDE-25). The split between this and
+            // the draw above is readable from totalMinted and totalReserveDrawn; DrewRewards carries
+            // the epoch's whole emission, as it did when all of it came from the reserve.
+            _mint(budget - fromReserve);
+        }
         if (budget != 0) {
-            totalReserveDrawn += budget;
             emit DrewRewards(currentEpoch(), budget);
             uint256 utilisation = (budget * _c(P_UTILISATION_REWARD_SHARE)) / Decimal.unit();
             ctx.basePool += budget - utilisation;
@@ -1244,15 +1295,19 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         uint256 commissionRewardFull = (rawReward * _c(P_VALIDATOR_COMMISSION)) / Decimal.unit();
         uint256 selfStake = getStake[validatorAddr][validatorID];
         if (selfStake != 0) {
-            uint256 lCommissionRewardFull = (commissionRewardFull * getLockedStake(validatorAddr, validatorID)) / selfStake;
-            Rewards memory lCommissionReward = _scaleLockupReward(lCommissionRewardFull, getLockupInfo[validatorAddr][validatorID].duration);
-            Rewards memory uCommissionReward = _scaleLockupReward(commissionRewardFull - lCommissionRewardFull, 0);
-            Rewards memory commission = _sum(lCommissionReward, uCommissionReward);
+            // The commission takes NO lock bonus (ECO-01b). The bonus redistributes the epoch's budget
+            // among STAKE (DECIDE-13), and the validator's own self-stake already earns it through the
+            // reward index like any other delegation; paying it a second time on the commission would
+            // have to come out of the delegators' pool. Its locked share still lands in the lockup
+            // categories, so an early unlock still forfeits part of it, as in v1.
+            uint256 lCommission = (commissionRewardFull * getLockedStake(validatorAddr, validatorID)) / selfStake;
+            Rewards memory commission = Rewards(0, lCommission, commissionRewardFull - lCommission);
             _rewardsStash[validatorAddr][validatorID] = _sum(_rewardsStash[validatorAddr][validatorID], commission);
             getStashedLockupRewards[validatorAddr][validatorID] = _sum(getStashedLockupRewards[validatorAddr][validatorID], commission);
         }
-        // the latest stake, not the snapshot's, for the accuracy of the distribution (as v1)
-        uint256 receivedStake = getValidator[validatorID].receivedStake;
+        // the latest stake, not the snapshot's, for the accuracy of the distribution (as v1), with the
+        // lock bonus folded into it so the multiplier redistributes this pool (ECO-01b)
+        uint256 receivedStake = _lockWeightedStake(validatorID);
         uint256 rewardPerToken = 0;
         if (receivedStake != 0) {
             rewardPerToken = ((rawReward - commissionRewardFull) * Decimal.unit()) / receivedStake;

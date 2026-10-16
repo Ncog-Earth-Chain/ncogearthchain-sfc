@@ -52,6 +52,16 @@ abstract contract SFCStorageV2 {
     uint256 public totalReserveDrawn;
     // slot 136: v1's accrued, never-minted rewards have been minted (mintV1Rewards; owner ruling 11)
     bool public v1RewardsSettled;
-    // slots 137..185: reserved headroom, used from the front
-    uint256[49] private __gap;
+    // slot 137: when emission started, the glide's t=0 (ECO-01b). Set by initialize on a fresh
+    // genesis and by initializeV2 on the testnet install; an install that set neither reads as a
+    // huge elapsed time, which is the glide's END rate -- the lowest, never the highest.
+    uint256 internal emissionStartTime;
+    // slot 138: validator ID -> sum over its delegations of lockedStake x lockupDuration, the
+    // lock-bonus weight the epoch's reward index is divided by so the lock multiplier REDISTRIBUTES
+    // the budget instead of raising it (ECO-01b, DECIDE-13). It is maintained by every path that
+    // moves a lockup; a lockup that has expired but has not been touched since is still counted,
+    // which dilutes the epoch and can only pay LESS than the budget, never more.
+    mapping(uint256 => uint256) internal _lockBonusWeight;
+    // slots 139..185: reserved headroom, used from the front
+    uint256[47] private __gap;
 }
