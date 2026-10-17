@@ -150,8 +150,23 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
     event MintedV1Rewards(uint256 amount);
 
     modifier onlyDriver() {
-        if (msg.sender != address(node)) revert NotDriver();
+        _onlyDriver();
         _;
+    }
+
+    function _onlyDriver() private view {
+        if (msg.sender != address(node)) revert NotDriver();
+    }
+
+    /// @dev Ownable's onlyOwner, same check and same revert reason, as one call instead of the check
+    /// inlined into every owner function (EIP-170: the core has no bytes to spare).
+    modifier ownerOnly() {
+        _ownerOnly();
+        _;
+    }
+
+    function _ownerOnly() private view {
+        require(isOwner(), "Ownable: caller is not the owner");
     }
 
     modifier nonReentrant() {
@@ -189,7 +204,7 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
     /// @notice The testnet install over v1 storage (DECIDE-22), by the owner (Timelock, 72 h class)
     /// right after NodeDriverAuth.upgradeCode. Runs once. Refuses to overwrite module slots a genesis
     /// builder already wrote, and refuses a v1 state that still has a stake tokenizer.
-    function initializeV2(address consts_, address reserve_, address treasury_, address insurancePool_) external onlyOwner reinitializer(2) {
+    function initializeV2(address consts_, address reserve_, address treasury_, address insurancePool_) external ownerOnly reinitializer(2) {
         if (__deprecated_stakeTokenizerAddress != address(0)) revert StakeTokenizerSet();
         if (address(consts) != address(0) || address(rewardsReserve) != address(0) || treasury != address(0) || insurancePool != address(0)) {
             revert ModulesAlreadySet();
@@ -431,7 +446,11 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         Rewards memory rewards = _claimRewards(delegator, toValidatorID);
         uint256 lockupReward = rewards.lockupExtraReward + rewards.lockupBaseReward;
         _delegate(delegator, toValidatorID, lockupReward + rewards.unlockedReward);
-        getLockupInfo[delegator][toValidatorID].lockedStake += lockupReward;
+        // the restaked lockup reward joins the lockup, and its weight (NEC-103). With no live lockup
+        // (_claimRewards has erased an expired one) the duration is 0 and so is the weight added.
+        LockedDelegation storage ld = getLockupInfo[delegator][toValidatorID];
+        ld.lockedStake += lockupReward;
+        _reweighLockup(toValidatorID, 0, lockupReward * ld.duration);
         emit RestakedRewards(delegator, toValidatorID, rewards.lockupExtraReward, rewards.lockupBaseReward, rewards.unlockedReward);
     }
 
@@ -489,39 +508,39 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
 
     /// @notice Refunds part of a slashed validator's delegation confiscations (7 d class). Bounded by
     /// the ConstantsManager's maxSlashingRefundRatio (D6: 50%).
-    function updateSlashingRefundRatio(uint256 validatorID, uint256 refundRatio) external onlyOwner {
+    function updateSlashingRefundRatio(uint256 validatorID, uint256 refundRatio) external ownerOnly {
         if (!isSlashed(validatorID)) revert ValidatorNotSlashed();
         if (refundRatio > _c(P_MAX_SLASHING_REFUND_RATIO)) revert RefundRatioTooHigh();
         slashingRefundRatio[validatorID] = refundRatio;
         emit UpdatedSlashingRefundRatio(validatorID, refundRatio);
     }
 
-    function updateConsts(address addr) external onlyOwner {
+    function updateConsts(address addr) external ownerOnly {
         consts = IConstantsManager(_contract(addr));
         emit UpdatedModule("consts", addr);
     }
 
-    function updateRewardsReserve(address addr) external onlyOwner {
+    function updateRewardsReserve(address addr) external ownerOnly {
         rewardsReserve = IRewardsReserve(_contract(addr));
         emit UpdatedModule("rewardsReserve", addr);
     }
 
-    function updateTreasury(address addr) external onlyOwner {
+    function updateTreasury(address addr) external ownerOnly {
         treasury = _contract(addr);
         emit UpdatedModule("treasury", addr);
     }
 
-    function updateInsurancePool(address addr) external onlyOwner {
+    function updateInsurancePool(address addr) external ownerOnly {
         insurancePool = _contract(addr);
         emit UpdatedModule("insurancePool", addr);
     }
 
-    function updateHostBonds(address addr) external onlyOwner {
+    function updateHostBonds(address addr) external ownerOnly {
         hostBonds = IHostBonds(_contract(addr));
         emit UpdatedModule("hostBonds", addr);
     }
 
-    function addExcludedFromCirculation(address vault) external onlyOwner {
+    function addExcludedFromCirculation(address vault) external ownerOnly {
         _contract(vault);
         for (uint256 i = 0; i < excludedFromCirculation.length; i++) {
             if (excludedFromCirculation[i] == vault) revert AlreadyExcluded();
@@ -532,7 +551,7 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
 
     /// @notice Takes a vault back out of the list, so a wrong or retired entry is never permanent
     /// (the list is a rule like any other: the Timelock moves it both ways).
-    function removeExcludedFromCirculation(address vault) external onlyOwner {
+    function removeExcludedFromCirculation(address vault) external ownerOnly {
         uint256 n = excludedFromCirculation.length;
         for (uint256 i = 0; i < n; i++) {
             if (excludedFromCirculation[i] == vault) {
@@ -553,7 +572,7 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
     /// an epoch). The installer computes `amount` in the same transaction from pendingRewards over
     /// every delegation, checked to hold the whole of totalStake (contracts/SFCv2Installer.sol). The
     /// ceiling is a code bound against a wrong amount: 5% of the supply.
-    function mintV1Rewards(uint256 amount) external onlyOwner {
+    function mintV1Rewards(uint256 amount) external ownerOnly {
         if (v1RewardsSettled || genesisSealed || amount > totalSupply / 20) revert V1RewardsSettled();
         v1RewardsSettled = true;
         _mint(amount);
@@ -847,7 +866,8 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
     }
 
     /// @dev A double-sign: doubleSignSelfSlashRatio of the self-stake leaves the stake now and is
-    /// routed (D6). A lockup larger than what is left shrinks to it.
+    /// routed (D6). A lockup larger than what is left shrinks to it, and its lock-bonus weight with it:
+    /// the cut part is no longer locked, so it must not keep diluting the reward index (NEC-103).
     function _slashSelfStake(uint256 validatorID) internal {
         address auth = getValidator[validatorID].auth;
         _stashRewards(auth, validatorID);
@@ -862,6 +882,7 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         totalStake -= amount;
         LockedDelegation storage ld = getLockupInfo[auth][validatorID];
         if (ld.lockedStake > left) {
+            _reweighLockup(validatorID, (ld.lockedStake - left) * ld.duration, 0);
             ld.lockedStake = left;
         }
         totalSlashedStake += amount;
@@ -1249,7 +1270,9 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
             return;
         }
         uint256 available = address(rewardsReserve).balance;
-        uint256 budget = consts.epochEmissionBudget(block.timestamp - emissionStartTime, ctx.epochDuration, totalStake, totalSupply, available);
+        // maxApy is measured on the ACTIVE stake (owner ruling 20): stake behind a deactivated or
+        // slashed validator earns nothing, so it does not raise the budget the earning stake shares
+        uint256 budget = consts.epochEmissionBudget(block.timestamp - emissionStartTime, ctx.epochDuration, totalActiveStake, totalSupply, available);
         uint256 fromReserve = budget < available ? budget : available;
         // a reserve that refuses the draw pays only the minted part: sealEpoch must not revert, so the
         // draw goes out as a low-level call, the same way _payReserve pays in
