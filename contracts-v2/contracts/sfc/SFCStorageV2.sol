@@ -59,7 +59,7 @@ abstract contract SFCStorageV2 {
     // slot 138: validator ID -> sum over its delegations of lockedStake x lockupDuration, the
     // lock-bonus weight the epoch's reward index is divided by so the lock multiplier REDISTRIBUTES
     // the budget instead of raising it (ECO-01b, DECIDE-13). It is maintained by every path that
-    // moves a lockup; a lockup that has expired but has not been touched since is still counted,
+    // moves a lockup, the double-sign confiscation and restakeRewards included (NEC-103); a lockup that has expired but has not been touched since is still counted,
     // which dilutes the epoch and can only pay LESS than the budget, never more.
     mapping(uint256 => uint256) internal _lockBonusWeight;
     // slots 139..185: reserved headroom, used from the front
