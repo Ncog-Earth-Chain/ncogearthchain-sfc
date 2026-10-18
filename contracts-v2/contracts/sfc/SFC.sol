@@ -295,21 +295,33 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
     /// stake (stake arrives only through _rawDelegate, whose _syncValidator refuses an unknown ID). The
     /// node sends only validators whose last weight report (_syncValidator: receivedStake while active)
     /// was not 0, and every change to receivedStake reports again, so no check fires on its input.
+    /// A set sent again REPLACES the one the snapshot holds (eco05b V5-B1): after a reverted sealEpoch
+    /// the snapshot is still this epoch's, while the node has moved on to the set it sealed and sends
+    /// every later array in that set's order and length. So the old set's IDs and marks are cleared
+    /// first (a validator that left keeps no mark, the repeat check sees this call's entries only),
+    /// and the total is counted once, from 0.
     function sealEpochValidators(uint256[] calldata nextValidatorIDs) external onlyDriver {
         EpochSnapshot storage snapshot = getEpochSnapshot[currentEpoch()];
-        uint256 total = snapshot.totalStake;
+        uint256[] storage ids = snapshot.validatorIDs;
+        while (ids.length != 0) {
+            unchecked {
+                delete snapshot.receivedStake[ids[ids.length - 1]];
+            }
+            ids.pop();
+        }
+        uint256 total;
         for (uint256 i = 0; i < nextValidatorIDs.length; ) {
             uint256 validatorID = nextValidatorIDs[i];
             uint256 receivedStake = getValidator[validatorID].receivedStake;
             if (receivedStake == 0 || snapshot.receivedStake[validatorID] != 0) revert MalformedValidatorSet();
             snapshot.receivedStake[validatorID] = receivedStake;
+            ids.push(validatorID);
             total += receivedStake;
             unchecked {
                 ++i;
             }
         }
         snapshot.totalStake = total;
-        snapshot.validatorIDs = nextValidatorIDs;
     }
 
     /// @notice Seals the current epoch (design 7): offline marking, the fee split, the emission draw,
