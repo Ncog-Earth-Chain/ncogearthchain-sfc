@@ -691,4 +691,21 @@ contract ConstantsManager is Initializable, Ownable {
             budget = ceiling;
         }
     }
+
+    /**
+     * @notice ECO-05 (DECIDE-15): one host's DDB revenue for an epoch, split by the governed hosting
+     * shares (`updateHostingFeeSplit`, the Timelock's 24 h class). The reserve, treasury and insurance
+     * parts round down and the host part is the REMAINDER, so the four always add up to `amount` to
+     * the wei -- rounding never strands or creates NEC. hostingHostShare is that same remainder as a
+     * rate; it is derived, so it is not read here.
+     *
+     * A view, like epochEmissionBudget and for the same reason: the SFC core has no EIP-170 room for
+     * the math, and the parameters it reads live here.
+     */
+    function hostingSplit(uint256 amount) external view returns (uint256 host, uint256 reserve, uint256 treasury, uint256 insurance) {
+        reserve = (amount * _values[uint256(Param.HostingReserveShare)]) / Decimal.unit();
+        treasury = (amount * _values[uint256(Param.HostingTreasuryShare)]) / Decimal.unit();
+        insurance = (amount * _values[uint256(Param.HostingInsuranceShare)]) / Decimal.unit();
+        host = amount - reserve - treasury - insurance;
+    }
 }

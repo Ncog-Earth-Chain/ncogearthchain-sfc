@@ -17,7 +17,9 @@ pragma solidity 0.8.20;
  *
  * with the SAME selector at every hop, plus one call from NetworkInitializer at block 1. The six
  * internal-tx selectors of gossip/blockproc/drivermodule/driver_txs.go therefore project onto the
- * six functions below.
+ * six functions below -- and a seventh, reportDdbFees (ECO-05, version "201"), which the node sends
+ * to the SFC DIRECTLY from the node principal address(0), with no NodeDriver hop (owner ruling 27):
+ * the node emits it only when version() names a release that has it.
  *
  * Events: the node decodes seven SFC events (gossip/sfcapi/process.go), reading topics[1..] and
  * fixed data offsets, so both the signature and the indexed layout are part of the contract. Two
@@ -75,4 +77,8 @@ interface ISFCNodeSurface {
         uint256[] calldata uptimes,
         uint256[] calldata originatedTxsFee
     ) external;
+
+    // --- ECO-05: sent by the node itself (msg.sender == address(0)), right before sealEpoch ---
+
+    function reportDdbFees(uint256[] calldata fees) external;
 }

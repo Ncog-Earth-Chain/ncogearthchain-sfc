@@ -30,4 +30,7 @@ interface IConstantsManager {
         uint256 liveSupply,
         uint256 reserveBalance
     ) external view returns (uint256);
+
+    /// @dev ECO-05: one host's DDB revenue split by the hosting shares; host is the remainder.
+    function hostingSplit(uint256 amount) external view returns (uint256 host, uint256 reserve, uint256 treasury, uint256 insurance);
 }
