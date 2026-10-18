@@ -1,0 +1,74 @@
+name: SFC v2 verify
+
+# GOV-01b's CI byte-compare (GOV-01c, NEC-176): the SFC v2 build in contracts-v2 is reproducible byte for
+# byte (no metadata hash, solc 0.8.20 pinned in package-lock.json), so CI rebuilds it and requires the
+# committed out/ to be exactly that build, every storage layout to be append-only, and the gate's
+# self-test to still refuse what it must (contracts-v2/verify.js, README.md "Build").
+#
+# Two jobs, both blocking:
+#
+#   verify      `npm ci && npm run verify` in contracts-v2: fresh build == out/, append-only layouts,
+#               the v1-port baseline, the 19-case self-test.
+#   node-copies the same build compared with the node repository's committed copies
+#               (ncogearthchain/genesis/sfc/testdata/v2): `node verify.js --node ../ncogearthchain`. Those
+#               copies are what the node embeds and its tests execute (sfc.V2Runtime), so a runtime
+#               rebuilt here and not copied there -- or edited there and not rebuilt here -- is red.
+#
+# The node repository is checked out INSIDE the workspace at ./ncogearthchain, so from contracts-v2 it
+# is ../ncogearthchain, the path README.md documents. Which node commit is compared: the repository
+# variable NODE_REF (a branch, tag or sha; default the node's default branch), or the `node_ref` input of
+# a manual run. A change to the v2 runtime lands in both repositories; until the node side has merged,
+# point NODE_REF (or the manual input) at the node branch that carries the new copies. NODE_REPO_TOKEN
+# (a read-only token) is needed only if the node repository is private.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      node_ref:
+        description: "node repository ref to compare testdata/v2 against (default: vars.NODE_REF, else its default branch)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts-v2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: contracts-v2/package-lock.json
+      - run: npm ci
+      - run: npm run verify
+
+  node-copies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout the node repository (ncogearthchain)
+        uses: actions/checkout@v4
+        with:
+          repository: Ncog-Earth-Chain/ncogearthchain
+          ref: ${{ inputs.node_ref || vars.NODE_REF || '' }}
+          path: ncogearthchain
+          token: ${{ secrets.NODE_REPO_TOKEN || github.token }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: contracts-v2/package-lock.json
+      - name: npm ci
+        working-directory: contracts-v2
+        run: npm ci
+      - name: Byte-compare the build with the node's testdata/v2
+        working-directory: contracts-v2
+        run: node verify.js --node ../ncogearthchain
