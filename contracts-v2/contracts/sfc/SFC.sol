@@ -48,7 +48,7 @@ import {SFCStorageV2} from "./SFCStorageV2.sol";
  *  - F9 sealEpoch checks its array lengths; _syncValidator is internal;
  *  - F10 the StakeTokenizer is gone;
  *  - F13 the concentration cap (DECIDE-24; design D3);
- *  - F14 version() is "200" (D8).
+ *  - F14 version() is "200" (D8); "201" adds reportDdbFees (ECO-05, the DDB host-fee split).
  */
 contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurface {
     // Validator status bits. The number grows with severity; a status only ever increases, except
@@ -101,8 +101,8 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
     error LockedAboveStake();
     error LockupDurationDecreases();
     error MalformedPubkey();
+    error MalformedValidatorSet();
     error ModulesAlreadySet();
-    error NotAscending();
     error NotContract();
     error NotDriver();
     error NotEnoughEpochsPassed();
@@ -286,23 +286,42 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         _syncValidator(validatorID, false);
     }
 
-    /// @notice The next epoch's validator set. The node sends SortedIDs(), so neither check can fire on
-    /// its input; they stop a malformed set from being recorded.
+    /// @notice The next epoch's validator set, in the order the node sends it: es.Validators.SortedIDs(),
+    /// weight descending, then ID ascending (forest-base/inter/pos), the order every array of the next
+    /// sealEpoch and reportDdbFees follows (entry i is nextValidatorIDs[i]). "200" took only ascending
+    /// IDs (NotAscending), so a set with unequal stakes was not recorded and every later seal failed
+    /// (GOV-01d). Each entry must hold stake and appear once: its stake is its mark in the snapshot, 0
+    /// before the entry and never 0 after, so a repeat is refused. An ID that does not exist holds no
+    /// stake (stake arrives only through _rawDelegate, whose _syncValidator refuses an unknown ID). The
+    /// node sends only validators whose last weight report (_syncValidator: receivedStake while active)
+    /// was not 0, and every change to receivedStake reports again, so no check fires on its input.
+    /// A set sent again REPLACES the one the snapshot holds (eco05b V5-B1): after a reverted sealEpoch
+    /// the snapshot is still this epoch's, while the node has moved on to the set it sealed and sends
+    /// every later array in that set's order and length. So the old set's IDs and marks are cleared
+    /// first (a validator that left keeps no mark, the repeat check sees this call's entries only),
+    /// and the total is counted once, from 0.
     function sealEpochValidators(uint256[] calldata nextValidatorIDs) external onlyDriver {
         EpochSnapshot storage snapshot = getEpochSnapshot[currentEpoch()];
-        uint256 prev = 0;
-        uint256 total = snapshot.totalStake;
-        for (uint256 i = 0; i < nextValidatorIDs.length; i++) {
+        uint256[] storage ids = snapshot.validatorIDs;
+        while (ids.length != 0) {
+            unchecked {
+                delete snapshot.receivedStake[ids[ids.length - 1]];
+            }
+            ids.pop();
+        }
+        uint256 total;
+        for (uint256 i = 0; i < nextValidatorIDs.length; ) {
             uint256 validatorID = nextValidatorIDs[i];
-            if (validatorID <= prev) revert NotAscending();
-            if (!_validatorExists(validatorID)) revert ValidatorNotFound();
-            prev = validatorID;
             uint256 receivedStake = getValidator[validatorID].receivedStake;
+            if (receivedStake == 0 || snapshot.receivedStake[validatorID] != 0) revert MalformedValidatorSet();
             snapshot.receivedStake[validatorID] = receivedStake;
+            ids.push(validatorID);
             total += receivedStake;
+            unchecked {
+                ++i;
+            }
         }
         snapshot.totalStake = total;
-        snapshot.validatorIDs = nextValidatorIDs;
     }
 
     /// @notice Seals the current epoch (design 7): offline marking, the fee split, the emission draw,
@@ -329,6 +348,40 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         snapshot.baseRewardPerSecond = _emissionPerSecond();
         snapshot.totalSupply = totalSupply;
         genesisSealed = true;
+    }
+
+    /// @notice ECO-05: the epoch's DDB hosting revenue, which is ALREADY HERE -- under
+    /// Upgrades2.DdbHostFees the node debits the DDB caller and credits this contract by the same
+    /// amount when it charges, so no supply moves and nothing is destroyed on any path. The node sends
+    /// it right before sealEpoch, from the node principal address(0) (no NodeDriver hop, owner ruling
+    /// 27): fees[i] is what the i-th validator of the epoch's snapshot carried, in the snapshot's
+    /// order, and fees[n] what no validator of the set carried. Each host's part is split by the
+    /// governed hosting shares (ConstantsManager.hostingSplit; host = the remainder): the host share
+    /// into that validator's own reward stash (claimRewards), the treasury and insurance shares by
+    /// call, each falling back to the reserve, and the reserve share with fees[n] into the
+    /// RewardsReserve. A length other than n + 1 is refused, as sealEpoch refuses its arrays.
+    function reportDdbFees(uint256[] calldata fees) external {
+        if (msg.sender != address(0)) revert NotDriver();
+        uint256[] storage ids = getEpochSnapshot[currentEpoch()].validatorIDs;
+        uint256 n = ids.length;
+        if (fees.length != n + 1) revert SealArraysMismatch();
+        uint256 toReserve = fees[n];
+        uint256 toTreasury = 0;
+        uint256 toInsurance = 0;
+        for (uint256 i = 0; i < n; ) {
+            uint256 id = ids[i];
+            (uint256 host, uint256 r, uint256 t, uint256 ins) = consts.hostingSplit(fees[i]);
+            unchecked {
+                _rewardsStash[getValidator[id].auth][id].unlockedReward += host;
+                toReserve += r;
+                toTreasury += t;
+                toInsurance += ins;
+                ++i;
+            }
+        }
+        unchecked {
+            _payReserve(toReserve + _payOrKeep(treasury, toTreasury) + _payOrKeep(insurancePool, toInsurance));
+        }
     }
 
     // ================================================================ validators and delegators
@@ -516,34 +569,32 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
     }
 
     function updateConsts(address addr) external ownerOnly {
-        consts = IConstantsManager(_contract(addr));
-        emit UpdatedModule("consts", addr);
+        consts = IConstantsManager(_module("consts", addr));
     }
 
     function updateRewardsReserve(address addr) external ownerOnly {
-        rewardsReserve = IRewardsReserve(_contract(addr));
-        emit UpdatedModule("rewardsReserve", addr);
+        rewardsReserve = IRewardsReserve(_module("rewardsReserve", addr));
     }
 
     function updateTreasury(address addr) external ownerOnly {
-        treasury = _contract(addr);
-        emit UpdatedModule("treasury", addr);
+        treasury = _module("treasury", addr);
     }
 
     function updateInsurancePool(address addr) external ownerOnly {
-        insurancePool = _contract(addr);
-        emit UpdatedModule("insurancePool", addr);
+        insurancePool = _module("insurancePool", addr);
     }
 
     function updateHostBonds(address addr) external ownerOnly {
-        hostBonds = IHostBonds(_contract(addr));
-        emit UpdatedModule("hostBonds", addr);
+        hostBonds = IHostBonds(_module("hostBonds", addr));
     }
 
     function addExcludedFromCirculation(address vault) external ownerOnly {
         _contract(vault);
-        for (uint256 i = 0; i < excludedFromCirculation.length; i++) {
+        for (uint256 i = 0; i < excludedFromCirculation.length; ) {
             if (excludedFromCirculation[i] == vault) revert AlreadyExcluded();
+            unchecked {
+                ++i;
+            }
         }
         excludedFromCirculation.push(vault);
         emit ExcludedFromCirculation(vault);
@@ -553,12 +604,15 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
     /// (the list is a rule like any other: the Timelock moves it both ways).
     function removeExcludedFromCirculation(address vault) external ownerOnly {
         uint256 n = excludedFromCirculation.length;
-        for (uint256 i = 0; i < n; i++) {
+        for (uint256 i = 0; i < n; ) {
             if (excludedFromCirculation[i] == vault) {
                 excludedFromCirculation[i] = excludedFromCirculation[n - 1];
                 excludedFromCirculation.pop();
                 emit IncludedInCirculation(vault);
                 return;
+            }
+            unchecked {
+                ++i;
             }
         }
         revert NotExcluded();
@@ -582,7 +636,7 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
     // ================================================================ views
 
     function version() external pure returns (bytes3) {
-        return "200";
+        return "201";
     }
 
     function currentEpoch() public view returns (uint256) {
@@ -601,10 +655,13 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         s = totalSupply;
         address reserve = address(rewardsReserve);
         uint256 locked = reserve.balance;
-        for (uint256 i = 0; i < excludedFromCirculation.length; i++) {
+        for (uint256 i = 0; i < excludedFromCirculation.length; ) {
             address vault = excludedFromCirculation[i];
             if (vault != reserve) {
                 locked += vault.balance;
+            }
+            unchecked {
+                ++i;
             }
         }
         return s > locked ? s - locked : 0;
@@ -649,7 +706,7 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
     }
 
     function rewardsStash(address delegator, uint256 validatorID) external view returns (uint256) {
-        Rewards memory stash = _rewardsStash[delegator][validatorID];
+        Rewards storage stash = _rewardsStash[delegator][validatorID];
         return stash.lockupBaseReward + stash.lockupExtraReward + stash.unlockedReward;
     }
 
@@ -733,6 +790,12 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
 
     function _contract(address addr) internal view returns (address) {
         if (addr.code.length == 0) revert NotContract();
+        return addr;
+    }
+
+    /// @dev A module setter's check and event: `addr` must be a contract.
+    function _module(bytes32 name, address addr) internal returns (address) {
+        emit UpdatedModule(name, _contract(addr));
         return addr;
     }
 
@@ -937,22 +1000,25 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         }
     }
 
+    /// @dev Pays `to` and returns what it could not pay (all of it when `to` is unset or refuses), for
+    /// the caller to send to the reserve instead. Never reverts.
+    function _payOrKeep(address to, uint256 amount) internal returns (uint256) {
+        if (amount != 0 && to != address(0)) {
+            (bool ok, ) = payable(to).call{value: amount}("");
+            if (ok) return 0;
+        }
+        return amount;
+    }
+
     /// @dev Splits a confiscation between the RewardsReserve and the InsurancePool
     /// (confiscationReserveShare; D6: 50 / 50). An insurance pool that is unset or refuses the payment
     /// sends its part to the reserve instead. Nothing is destroyed.
     function _routeConfiscation(uint256 validatorID, address from, uint256 amount) internal {
         uint256 toReserve = (amount * _c(P_CONFISCATION_RESERVE_SHARE)) / Decimal.unit();
         uint256 toInsurance = amount - toReserve;
-        if (toInsurance != 0) {
-            bool ok = false;
-            if (insurancePool != address(0)) {
-                (ok, ) = payable(insurancePool).call{value: toInsurance}("");
-            }
-            if (!ok) {
-                toReserve += toInsurance;
-                toInsurance = 0;
-            }
-        }
+        uint256 kept = _payOrKeep(insurancePool, toInsurance);
+        toReserve += kept;
+        toInsurance -= kept;
         _payReserve(toReserve);
         emit Confiscated(validatorID, from, amount, toReserve, toInsurance);
     }
@@ -1103,13 +1169,16 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
             return rate;
         }
         RewardGap[] storage gaps = _rewardGaps[validatorID];
-        for (uint256 i = gaps.length; i > 0; i--) {
+        for (uint256 i = gaps.length; i > 0; ) {
             RewardGap storage g = gaps[i - 1];
             if (epoch > g.toEpoch) {
                 break;
             }
             if (epoch >= g.fromEpoch) {
                 return g.accumulatedRewardPerToken;
+            }
+            unchecked {
+                --i;
             }
         }
         return 0;
@@ -1128,7 +1197,7 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         if (address(consts) != address(0)) {
             (blocksNum, time) = (_c(P_OFFLINE_PENALTY_THRESHOLD_BLOCKS_NUM), _c(P_OFFLINE_PENALTY_THRESHOLD_TIME));
         }
-        for (uint256 i = 0; i < validatorIDs.length; i++) {
+        for (uint256 i = 0; i < validatorIDs.length; ) {
             uint256 id = validatorIDs[i];
             // not confiscated: an OFFLINE validator comes back with reactivateValidator (design 8)
             if (blocksNum != 0 && offlineBlocks[i] > blocksNum && offlineTimes[i] >= time) {
@@ -1137,6 +1206,9 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
             }
             snapshot.offlineTime[id] = offlineTimes[i];
             snapshot.offlineBlocks[id] = offlineBlocks[i];
+            unchecked {
+                ++i;
+            }
         }
     }
 
@@ -1163,20 +1235,26 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         if (block.timestamp > prevSnapshot.endTime) {
             ctx.epochDuration = block.timestamp - prevSnapshot.endTime;
         }
-        for (uint256 i = 0; i < validatorIDs.length; i++) {
+        for (uint256 i = 0; i < validatorIDs.length; ) {
             uint256 prevFee = prevSnapshot.accumulatedOriginatedTxsFee[validatorIDs[i]];
             uint256 fee = accumulatedOriginatedTxsFee[i] > prevFee ? accumulatedOriginatedTxsFee[i] - prevFee : 0;
             _weigh(ctx, i, snapshot.receivedStake[validatorIDs[i]], fee, uptimes[i]);
+            unchecked {
+                ++i;
+            }
         }
 
         _splitFees(ctx);
         _drawEmission(ctx);
 
-        for (uint256 i = 0; i < validatorIDs.length; i++) {
+        for (uint256 i = 0; i < validatorIDs.length; ) {
             uint256 id = validatorIDs[i];
             _creditValidator(snapshot, id, _rawReward(ctx, i), ctx.prevEpoch);
             snapshot.accumulatedOriginatedTxsFee[id] = accumulatedOriginatedTxsFee[i];
             snapshot.accumulatedUptime[id] = prevSnapshot.accumulatedUptime[id] + uptimes[i];
+            unchecked {
+                ++i;
+            }
         }
 
         snapshot.epochFee = ctx.epochFee;
@@ -1237,13 +1315,10 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
             toValidators += toReserve;
             toReserve = 0;
         }
-        if (toTreasury != 0) {
-            (bool ok, ) = payable(treasury).call{value: toTreasury}("");
-            if (!ok) {
-                toValidators += toTreasury;
-                toTreasury = 0;
-                sustainability = 0;
-            }
+        if (_payOrKeep(treasury, toTreasury) != 0) {
+            toValidators += toTreasury;
+            toTreasury = 0;
+            sustainability = 0;
         }
         ctx.txPool = toValidators;
         emit SplitEpochFees(currentEpoch(), toValidators, toReserve, toTreasury, sustainability);
