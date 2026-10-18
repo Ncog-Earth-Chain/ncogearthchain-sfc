@@ -101,8 +101,8 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
     error LockedAboveStake();
     error LockupDurationDecreases();
     error MalformedPubkey();
+    error MalformedValidatorSet();
     error ModulesAlreadySet();
-    error NotAscending();
     error NotContract();
     error NotDriver();
     error NotEnoughEpochsPassed();
@@ -286,18 +286,22 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         _syncValidator(validatorID, false);
     }
 
-    /// @notice The next epoch's validator set. The node sends SortedIDs(), so neither check can fire on
-    /// its input; they stop a malformed set from being recorded.
+    /// @notice The next epoch's validator set, in the order the node sends it: es.Validators.SortedIDs(),
+    /// weight descending, then ID ascending (forest-base/inter/pos), the order every array of the next
+    /// sealEpoch and reportDdbFees follows (entry i is nextValidatorIDs[i]). "200" took only ascending
+    /// IDs (NotAscending), so a set with unequal stakes was not recorded and every later seal failed
+    /// (GOV-01d). Each entry must hold stake and appear once: its stake is its mark in the snapshot, 0
+    /// before the entry and never 0 after, so a repeat is refused. An ID that does not exist holds no
+    /// stake (stake arrives only through _rawDelegate, whose _syncValidator refuses an unknown ID). The
+    /// node sends only validators whose last weight report (_syncValidator: receivedStake while active)
+    /// was not 0, and every change to receivedStake reports again, so no check fires on its input.
     function sealEpochValidators(uint256[] calldata nextValidatorIDs) external onlyDriver {
         EpochSnapshot storage snapshot = getEpochSnapshot[currentEpoch()];
-        uint256 prev = 0;
         uint256 total = snapshot.totalStake;
         for (uint256 i = 0; i < nextValidatorIDs.length; ) {
             uint256 validatorID = nextValidatorIDs[i];
-            if (validatorID <= prev) revert NotAscending();
-            if (!_validatorExists(validatorID)) revert ValidatorNotFound();
-            prev = validatorID;
             uint256 receivedStake = getValidator[validatorID].receivedStake;
+            if (receivedStake == 0 || snapshot.receivedStake[validatorID] != 0) revert MalformedValidatorSet();
             snapshot.receivedStake[validatorID] = receivedStake;
             total += receivedStake;
             unchecked {
