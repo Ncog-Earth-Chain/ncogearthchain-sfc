@@ -123,6 +123,11 @@ if (nodeIdx > 0) {
         else if (theirs !== files[name]) fail(`node testdata/v2/${name} differs from this build`);
         else console.log(`ok   node testdata/v2/${name}`);
     }
+    // ...and the node carries every runtime this build produces: a runtime with no node copy is one the
+    // node neither executes nor pins (TestEveryV2ArtefactIsPinned), so a deleted copy is red here too.
+    for (const name of Object.keys(files).filter((n) => n.endsWith('.bin-runtime')).sort()) {
+        if (!fs.existsSync(path.join(nodeDir, name))) fail(`node testdata/v2/${name} is missing: copy out/${name} there`);
+    }
 }
 
 // 4. self-test of step 2. Each case rewrites declarations (and, where the compiler needs it, the one

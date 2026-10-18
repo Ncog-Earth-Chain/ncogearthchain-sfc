@@ -30,6 +30,10 @@ npm run verify    # the CI gate (below)
 node verify.js --node ../ncogearthchain   # also compare the node repo's testdata/v2 copies
 ```
 
+CI runs both: `.github/workflows/sfc-v2-verify.yml` (job `verify`: `npm ci` + `npm run verify`; job
+`node-copies`: the node repository checked out at `./ncogearthchain`, then `node verify.js --node
+../ncogearthchain`). The node's local gate runs the same `--node` check against its own tree.
+
 The settings are in `build-lib.js` and apply to every module: optimizer on, **runs 200**,
 **evmVersion shanghai**, **`metadata.bytecodeHash: none`**. Line endings are normalised before
 compiling. With no metadata hash, the bytes depend only on the source and these settings, so `out/` is
@@ -58,7 +62,7 @@ reproduced, because each carries an IPFS hash of a working tree nobody has (GOV-
    `../contracts-0.8.20` (SFC v2 core's baseline is v1's layout, design §5.2). Generate it with
    `node compile.js --port-baselines`; a hand-edited copy fails;
 4. with `--node`, the node repository's `ncogearthchain/genesis/sfc/testdata/v2/` copies are
-   byte-identical to `out/`;
+   byte-identical to `out/`, and the node carries every `.bin-runtime` this build produces;
 5. the gate in 2 has teeth and is no stricter than the design: a **self-test** of 19 cases compiles
    broken variants (`History` reordered, a `Change` member retyped or resized, the ring resized, a
    member added to the inline `Change`, `_values` resized, v2's `_initialized` widened to `uint16`
