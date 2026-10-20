@@ -886,7 +886,10 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
             mstore(add(d, 64), shl(96, caller()))
             mstore(add(d, 84), h)
             mstore(d, keccak256(d, 116))
-            ok := and(staticcall(gas(), shl(136, NEC_VERIFY), raw, add(2624, pop.length), 0, 32), and(eq(returndatasize(), 32), eq(mload(0), signer)))
+            // the call first: Yul evaluates arguments right to left, so returndatasize() inside the
+            // same expression would be read BEFORE the call ran
+            ok := staticcall(gas(), shl(136, NEC_VERIFY), raw, add(2624, pop.length), 0, 32)
+            ok := and(ok, and(eq(returndatasize(), 32), eq(mload(0), signer)))
         }
         if (!ok) revert BadProofOfPossession();
     }
