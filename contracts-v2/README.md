@@ -81,6 +81,7 @@ solc:
 * `ncogearthchain/genesis/sfc/constants_v2_test.go`: the ConstantsManager against the decided parameter table;
 * `ncogearthchain/genesis/sfc/nodesurface_test.go`: the node-surface harness, which runs SFC v2 core (`v2 SFC core` in `sfcImplementations`) next to the two v1 controls;
 * `ncogearthchain/genesis/sfc/sfcv2_test.go`: SFC v2 core's behaviour: the linear unlock penalty (plan mutant (i)), the `sealEpoch` length check (mutant (ii)), the concentration cap, the D9 reward gaps and the supply identity.
+* `ncogearthchain/genesis/sfc/sec15b_test.go`: SEC-15b ("202"), in the EVM with the NecVerify precompile active: a valid proof of possession binds the key; a PoP by another key, a key bound to another validator ID and a validator's own bound key are refused; the genesis records its keys and refuses a duplicate; the back-fill of a chain upgraded to "202" binds a shared key to the lowest ID; with pq-precompiles inactive `createValidator` and `updateValidatorPubkey` revert (fail closed); and the PoP digest is the contract's.
 
 After changing a contract, rebuild, copy the changed `out/` files into the node's `testdata/v2/`,
 update the hash pins in `nodesurface_test.go`, and run both suites.
