@@ -48,7 +48,8 @@ import {SFCStorageV2} from "./SFCStorageV2.sol";
  *  - F9 sealEpoch checks its array lengths; _syncValidator is internal;
  *  - F10 the StakeTokenizer is gone;
  *  - F13 the concentration cap (DECIDE-24; design D3);
- *  - F14 version() is "200" (D8); "201" adds reportDdbFees (ECO-05, the DDB host-fee split).
+ *  - F14 version() is "200" (D8); "201" adds reportDdbFees (ECO-05, the DDB host-fee split); "202"
+ *    binds every validator key to ONE validator ID for good, by proof of possession (SEC-15b).
  */
 contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurface {
     // Validator status bits. The number grows with severity; a status only ever increases, except
@@ -65,6 +66,19 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
     // from registering one.
     uint256 internal constant PUBKEY_LENGTH = 2593;
     bytes1 internal constant PUBKEY_TYPE = 0xc0;
+
+    // SEC-15b: a new or rotated key carries a proof of possession (PoP), an ML-DSA-87 signature by
+    // that key over keccak256(POP_DOMAIN || chainid || this SFC || msg.sender || keccak256(pubkey)),
+    // verified by the NecVerify precompile (SEC-04; ncog-evm core/vm/contracts_necpq.go): input the
+    // raw key (2,592 B, no type byte) || signature (4,627 B) || digest (32 B), output the signer's
+    // address as a 32-byte word, or zero. It exists only while pq-precompiles is active; before that
+    // its address is an empty account, where a staticcall SUCCEEDS with EMPTY return data. So a PoP
+    // counts only on success AND a 32-byte return AND the key's own address (fail closed, owner
+    // ruling 31 (2)). The domain tag is new: no other NEC digest starts with it.
+    uint256 internal constant NEC_VERIFY = 0xd300ec; // << 136: 0xd300Ec0000000000000000000000000000000000
+    uint256 internal constant POP_DOMAIN = 0x4e45432d5346432d504f5001; // "NEC-SFC-POP\x01"
+    // _keysBoundThrough once every validator's key is recorded in pubkeyBoundTo.
+    uint256 internal constant KEYS_BOUND = type(uint256).max;
 
     // ConstantsManager.Param indices (its enum is append-only: an index is its storage index and never
     // changes meaning). Every economic figure below is read through _c() when it is applied.
@@ -93,10 +107,13 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
     // Errors. Custom errors, not strings: EIP-170 leaves the core no room for revert strings.
     error AlreadyExcluded();
     error AlreadyLockedUp();
+    error BadProofOfPossession();
     error ConcentrationCapExceeded();
     error DelegationLimitExceeded();
     error GenesisSealed();
     error IncorrectDuration();
+    error KeysBound();
+    error KeysNotBound();
     error InsufficientSelfStake();
     error LockedAboveStake();
     error LockupDurationDecreases();
@@ -117,6 +134,7 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
     error NothingToStash();
     error OnePubkeyUpdatePerEpoch();
     error PaymentFailed();
+    error PubkeyBound();
     error Reentrant();
     error RefundRatioTooHigh();
     error RequestExists();
@@ -199,6 +217,8 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         totalSupply = _totalSupply;
         emissionStartTime = block.timestamp;
         getEpochSnapshot[sealedEpoch].endTime = block.timestamp;
+        // born "202": no key predates the binding, setGenesisValidator records every genesis key
+        _keysBoundThrough = KEYS_BOUND;
     }
 
     /// @notice The testnet install over v1 storage (DECIDE-22), by the owner (Timelock, 72 h class)
@@ -231,7 +251,8 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         if (genesisSealed) revert GenesisSealed();
         if (auth == address(0) || validatorID == 0) revert ZeroAddress();
         if (getValidator[validatorID].auth != address(0)) revert ValidatorExists();
-        _requirePubkey(pubkey);
+        // trusted ceremony input: no PoP, but the key is bound like any other and a duplicate refused
+        _bindPubkey(validatorID, pubkey);
         _rawCreateValidator(auth, validatorID, pubkey, status, createdEpoch, createdTime, deactivatedEpoch, deactivatedTime);
         if (validatorID > lastValidatorID) {
             lastValidatorID = validatorID;
@@ -386,21 +407,25 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
 
     // ================================================================ validators and delegators
 
-    function createValidator(bytes calldata pubkey) external payable nonReentrant {
+    /// @notice `pop` is the key's proof of possession for msg.sender, and the key must never have been
+    /// bound to any validator ID (_bindProvenPubkey).
+    function createValidator(bytes calldata pubkey, bytes calldata pop) external payable nonReentrant {
         if (msg.value < _c(P_MIN_SELF_STAKE)) revert InsufficientSelfStake();
-        _requirePubkey(pubkey);
         uint256 validatorID = ++lastValidatorID;
+        _bindProvenPubkey(validatorID, pubkey, pop);
         _rawCreateValidator(msg.sender, validatorID, pubkey, OK_STATUS, currentEpoch(), block.timestamp, 0, 0);
         _delegate(msg.sender, validatorID, msg.value);
     }
 
     /// @notice Rotates the caller's validator key, at most once per epoch. A validator in the set gets
     /// its weight and then the key sent to the node, which applies both at the next seal (2.2 rule 1).
-    function updateValidatorPubkey(bytes calldata pubkey) external nonReentrant {
+    /// The new key carries its PoP and must never have been bound, to this validator either: the old
+    /// key stays bound to it for good, and a rotation always goes to a fresh key.
+    function updateValidatorPubkey(bytes calldata pubkey, bytes calldata pop) external nonReentrant {
         uint256 validatorID = getValidatorID[msg.sender];
         if (validatorID == 0) revert ValidatorNotFound();
         if (isSlashed(validatorID)) revert ValidatorSlashed();
-        _requirePubkey(pubkey);
+        _bindProvenPubkey(validatorID, pubkey, pop);
         if (lastPubkeyUpdateEpoch[validatorID] >= currentEpoch()) revert OnePubkeyUpdatePerEpoch();
         lastPubkeyUpdateEpoch[validatorID] = currentEpoch();
         getValidatorPubkey[validatorID] = pubkey;
@@ -559,6 +584,50 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
 
     // ================================================================ owner (the Timelock)
 
+    /// @notice SEC-15b's back-fill (owner ruling 31 (1)) on a chain that reaches "202" by a code op,
+    /// whose existing keys no binding recorded: binds the current key of the next `count` validator
+    /// IDs, in ascending ID order, to the FIRST (lowest) ID that holds it -- a later ID sharing it stays
+    /// unbound for it and can never bind it (the node's SEC-15 rule, NEC-182). Resumable: each call
+    /// continues where the last one stopped, and the call that reaches lastValidatorID completes it;
+    /// after that it refuses to run (KeysBound), as it does on a chain born "202". Until it completes,
+    /// createValidator and updateValidatorPubkey refuse (KeysNotBound), so no binding can race it and
+    /// lastValidatorID cannot move under it. About 0.2M gas per validator (its key's 82 storage words
+    /// are read), so a 10M-gas transaction takes about 45: page with `count`. A rotated-away key of a
+    /// pre-"202" rotation is not in storage any more and is not recorded.
+    function bindExistingKeys(uint256 count) external ownerOnly {
+        uint256 id = _keysBoundThrough;
+        if (id == KEYS_BOUND) revert KeysBound();
+        uint256 last = lastValidatorID;
+        assembly ("memory-safe") {
+            let m := mload(0x40)
+            for {} and(lt(id, last), gt(count, 0)) {} {
+                id := add(id, 1)
+                count := sub(count, 1)
+                // getValidatorPubkey[id]. Only a 2,593-byte key can collide with a binding
+                // (_requirePubkey); one is stored long: its slot holds 2 x 2,593 + 1 and its 82 words
+                // start at keccak256(slot). Any other key is skipped.
+                mstore(0, id)
+                mstore(0x20, getValidatorPubkey.slot)
+                let p := keccak256(0, 0x40)
+                if eq(sload(p), 5187) {
+                    mstore(0, p)
+                    let w := keccak256(0, 0x20)
+                    for { let i := 0 } lt(i, 82) { i := add(i, 1) } {
+                        mstore(add(m, shl(5, i)), sload(add(w, i)))
+                    }
+                    // pubkeyBoundTo[keccak256(key)], set unless a lower ID holds it already
+                    mstore(0, keccak256(m, PUBKEY_LENGTH))
+                    mstore(0x20, pubkeyBoundTo.slot)
+                    p := keccak256(0, 0x40)
+                    if iszero(sload(p)) {
+                        sstore(p, id)
+                    }
+                }
+            }
+        }
+        _keysBoundThrough = id == last ? KEYS_BOUND : id;
+    }
+
     /// @notice Refunds part of a slashed validator's delegation confiscations (7 d class). Bounded by
     /// the ConstantsManager's maxSlashingRefundRatio (D6: 50%).
     function updateSlashingRefundRatio(uint256 validatorID, uint256 refundRatio) external ownerOnly {
@@ -636,7 +705,7 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
     // ================================================================ views
 
     function version() external pure returns (bytes3) {
-        return "201";
+        return "202";
     }
 
     function currentEpoch() public view returns (uint256) {
@@ -697,12 +766,6 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
 
     function getEpochOfflineBlocks(uint256 epoch, uint256 validatorID) external view returns (uint256) {
         return getEpochSnapshot[epoch].offlineBlocks[validatorID];
-    }
-
-    /// @notice The reward gaps recorded for a validator (D9): [fromEpoch, toEpoch] and the reward index
-    /// carried across them.
-    function getRewardGaps(uint256 validatorID) external view returns (RewardGap[] memory) {
-        return _rewardGaps[validatorID];
     }
 
     function rewardsStash(address delegator, uint256 validatorID) external view returns (uint256) {
@@ -786,6 +849,46 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
 
     function _requirePubkey(bytes calldata pubkey) internal pure {
         if (pubkey.length != PUBKEY_LENGTH || pubkey[0] != PUBKEY_TYPE) revert MalformedPubkey();
+    }
+
+    /// @dev Binds a well-formed key to `validatorID` for good (SEC-15b): a key bound to ANY ID before,
+    /// this one included, is refused (PubkeyBound).
+    function _bindPubkey(uint256 validatorID, bytes calldata pubkey) private {
+        _requirePubkey(pubkey);
+        bytes32 h = keccak256(pubkey);
+        if (pubkeyBoundTo[h] != 0) revert PubkeyBound();
+        pubkeyBoundTo[h] = validatorID;
+    }
+
+    /// @dev _bindPubkey with the key's proof of possession for msg.sender, which the digest names
+    /// because createValidator assigns the validator ID only when it runs (see NEC_VERIFY). Refused
+    /// until the back-fill has completed (bindExistingKeys). A PoP replayed by another sender does not
+    /// verify; a replay by its own sender can bind only a key that was never bound, which that sender
+    /// could do anyway, and only once: the binding it makes refuses every later one.
+    function _bindProvenPubkey(uint256 validatorID, bytes calldata pubkey, bytes calldata pop) private {
+        if (_keysBoundThrough != KEYS_BOUND) revert KeysNotBound();
+        _bindPubkey(validatorID, pubkey);
+        bool ok;
+        assembly ("memory-safe") {
+            // free memory, never kept: the key (2,593 B, its length already checked) at m, so the
+            // raw key the precompile takes starts at m + 1, followed by the PoP and the digest
+            let m := mload(0x40)
+            calldatacopy(m, pubkey.offset, PUBKEY_LENGTH)
+            let h := keccak256(m, PUBKEY_LENGTH)
+            let raw := add(m, 1)
+            let signer := shr(96, shl(96, keccak256(raw, 2592)))
+            let d := add(add(raw, 2592), pop.length)
+            calldatacopy(add(raw, 2592), pop.offset, pop.length)
+            // the digest, packed: POP_DOMAIN (12) || chainid (32) || this (20) || msg.sender (20) || h (32)
+            mstore(d, shl(160, POP_DOMAIN))
+            mstore(add(d, 12), chainid())
+            mstore(add(d, 44), shl(96, address()))
+            mstore(add(d, 64), shl(96, caller()))
+            mstore(add(d, 84), h)
+            mstore(d, keccak256(d, 116))
+            ok := and(staticcall(gas(), shl(136, NEC_VERIFY), raw, add(2624, pop.length), 0, 32), and(eq(returndatasize(), 32), eq(mload(0), signer)))
+        }
+        if (!ok) revert BadProofOfPossession();
     }
 
     function _contract(address addr) internal view returns (address) {

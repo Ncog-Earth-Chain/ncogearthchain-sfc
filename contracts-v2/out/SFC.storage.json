@@ -943,10 +943,36 @@
  {
   "slot": "139",
   "offset": 0,
-  "label": "__gap",
-  "type": "uint256[47]",
+  "label": "pubkeyBoundTo",
+  "type": "mapping(bytes32 => uint256)",
+  "encoding": "mapping",
+  "bytes": 32,
+  "key": {
+   "type": "bytes32",
+   "encoding": "inplace",
+   "bytes": 32
+  },
+  "value": {
+   "type": "uint256",
+   "encoding": "inplace",
+   "bytes": 32
+  }
+ },
+ {
+  "slot": "140",
+  "offset": 0,
+  "label": "_keysBoundThrough",
+  "type": "uint256",
   "encoding": "inplace",
-  "bytes": 1504,
+  "bytes": 32
+ },
+ {
+  "slot": "141",
+  "offset": 0,
+  "label": "__gap",
+  "type": "uint256[45]",
+  "encoding": "inplace",
+  "bytes": 1440,
   "base": {
    "type": "uint256",
    "encoding": "inplace",
