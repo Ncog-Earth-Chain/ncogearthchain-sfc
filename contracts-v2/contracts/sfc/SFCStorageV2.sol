@@ -40,8 +40,9 @@ abstract contract SFCStorageV2 {
     uint256 internal _reentrancyStatus;
     // slot 130: fences setGenesisValidator / setGenesisDelegation once the first epoch is sealed
     bool public genesisSealed;
-    // slot 131: validator ID -> the epoch of its last pubkey rotation (one per epoch)
-    mapping(uint256 => uint256) public lastPubkeyUpdateEpoch;
+    // slot 131: validator ID -> the epoch of its last pubkey rotation (one per epoch). Internal since
+    // "202": its getter had no caller and its 54 B went to SEC-15b's key binding (EIP-170)
+    mapping(uint256 => uint256) internal lastPubkeyUpdateEpoch;
     // slot 132: validator ID -> its reward-index gaps, oldest first (D9)
     mapping(uint256 => RewardGap[]) internal _rewardGaps;
     // slot 133: vaults excluded from circulatingSupply() (ECO-01a; design 11 item 4)
@@ -62,6 +63,14 @@ abstract contract SFCStorageV2 {
     // moves a lockup, the double-sign confiscation and restakeRewards included (NEC-103); a lockup that has expired but has not been touched since is still counted,
     // which dilutes the epoch and can only pay LESS than the budget, never more.
     mapping(uint256 => uint256) internal _lockBonusWeight;
-    // slots 139..185: reserved headroom, used from the front
-    uint256[47] private __gap;
+    // slot 139: keccak256(validator pubkey, all 2,593 bytes) -> the validator ID it is bound to, FOR
+    // GOOD (SEC-15b, owner ruling 31 (1)): a key bound to an ID never moves to another ID, and neither
+    // a rotation away from it nor an exit frees it. 0 = unbound.
+    mapping(bytes32 => uint256) public pubkeyBoundTo;
+    // slot 140: the key back-fill of a chain that reached "202" by a code op (bindExistingKeys): the
+    // last validator ID whose key it recorded, or KEYS_BOUND once every validator's key is recorded
+    // (set by initialize on a chain whose SFC is born "202", where setGenesisValidator records each).
+    uint256 internal _keysBoundThrough;
+    // slots 141..185: reserved headroom, used from the front
+    uint256[45] private __gap;
 }

@@ -8,14 +8,14 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { ROOT, SETTINGS, PORT_BASELINES, build, portBaselineText } = require('./build-lib');
+const { ROOT, SETTINGS, TARGETS, PORT_BASELINES, build, portBaselineText } = require('./build-lib');
 
 const { files, warnings } = build();
 for (const w of warnings) console.error(w.formattedMessage);
 
 const outDir = path.join(ROOT, 'out');
 fs.mkdirSync(outDir, { recursive: true });
-console.log(`solc-js ${SETTINGS.compilerVersion} | optimizer runs ${SETTINGS.optimizer.runs} | evmVersion ${SETTINGS.evmVersion} | metadata hash none`);
+console.log(`solc-js ${SETTINGS.compilerVersion} | optimizer runs ${SETTINGS.optimizer.runs} (${TARGETS.filter((t) => t.runs !== undefined).map((t) => `${t.name} ${t.runs}`).join(", ")}) | evmVersion ${SETTINGS.evmVersion} | metadata hash none`);
 for (const name of Object.keys(files).sort()) {
     fs.writeFileSync(path.join(outDir, name), files[name]);
     if (name.endsWith('.bin-runtime')) {

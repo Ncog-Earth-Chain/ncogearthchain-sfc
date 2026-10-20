@@ -21,7 +21,8 @@ const SETTINGS = {
     // runs 200, deliberately NOT the 10000 the four inherited predeploys were built with. 10000
     // optimises for call cost at the expense of size, and the v1 SFC built that way is already
     // 22,713 B of EIP-170's 24,576 B; SFC v2 core adds the supply ledger, fee split, concentration
-    // cap, reactivation and pubkey rotation. One setting for every module, chosen for headroom.
+    // cap, reactivation and pubkey rotation. Chosen for headroom; the default for every module, which
+    // a TARGETS entry may override with its own `runs` (SFC v2 core does: see TARGETS).
     optimizer: { enabled: true, runs: 200 },
     // shanghai: PUSH0 (EIP-3855). The chain's interpreter enables it unconditionally
     // (ncogearthchain/rules.go DefaultVMConfig ExtraEips 3855), and the deployed predeploys already
@@ -33,9 +34,15 @@ const SETTINGS = {
 // Contracts whose artefacts are produced, and which outputs each gets.
 //   full: abi + creation code + runtime code + storage layout
 //   abi:  interfaces, which have no code
+// `runs`, where given, replaces SETTINGS.optimizer.runs for that contract alone. SFC v2 core is built
+// with runs 1 (SEC-15b, "202"): the proof of possession and the key binding did not fit EIP-170 at
+// runs 200, and runs 1 is the smallest code solc emits for the same source -- 403 B less on "201"'s
+// source, at a little more gas per call (the measured table: docs/design/sfc-v2.md in the node
+// repository, "v2.2"). Only the SFC: the ConstantsManager keeps runs 200 and its bytes (sha256
+// af966a5c...), which a ConstantsManager already deployed on a chain must keep matching.
 const TARGETS = [
     { file: 'contracts/sfc/ConstantsManager.sol', name: 'ConstantsManager', kind: 'full' },
-    { file: 'contracts/sfc/SFC.sol', name: 'SFC', kind: 'full' },
+    { file: 'contracts/sfc/SFC.sol', name: 'SFC', kind: 'full', runs: 1 },
     { file: 'contracts/interfaces/ISFCNodeSurface.sol', name: 'ISFCNodeSurface', kind: 'abi' },
     { file: 'contracts/interfaces/INodeDriverAuth.sol', name: 'INodeDriverAuth', kind: 'abi' },
 ];
@@ -322,20 +329,22 @@ function compareMembers(errs, where, bm, nm, growable) {
     }
 }
 
-function build() {
-    if (solc.version() !== SETTINGS.compilerVersion) {
-        throw new Error(`solc ${solc.version()} is installed; ${SETTINGS.compilerVersion} is pinned (npm ci)`);
+// One compilation of every source with the optimizer at `runs`, producing the outputs of `targets`
+// only (so solc's code-size warning speaks of the runs each contract is actually built with).
+function compileFor(runs, targets) {
+    const outputSelection = {};
+    for (const t of targets) {
+        outputSelection[t.file] = outputSelection[t.file] || {};
+        outputSelection[t.file][t.name] = ['abi', 'evm.bytecode.object', 'evm.deployedBytecode.object', 'storageLayout'];
     }
     const input = {
         language: 'Solidity',
         sources: sources(),
         settings: {
-            optimizer: SETTINGS.optimizer,
+            optimizer: { ...SETTINGS.optimizer, runs },
             evmVersion: SETTINGS.evmVersion,
             metadata: SETTINGS.metadata,
-            outputSelection: {
-                '*': { '*': ['abi', 'evm.bytecode.object', 'evm.deployedBytecode.object', 'storageLayout'] },
-            },
+            outputSelection,
         },
     };
     const out = JSON.parse(solc.compile(JSON.stringify(input)));
@@ -343,12 +352,26 @@ function build() {
     if (errors.length) {
         throw new Error(errors.map((e) => e.formattedMessage).join('\n'));
     }
-    const warnings = (out.errors || []).filter((e) => e.severity !== 'error');
+    return out;
+}
+
+function build() {
+    if (solc.version() !== SETTINGS.compilerVersion) {
+        throw new Error(`solc ${solc.version()} is installed; ${SETTINGS.compilerVersion} is pinned (npm ci)`);
+    }
+    const runsOf = (t) => (t.runs === undefined ? SETTINGS.optimizer.runs : t.runs);
+    const outs = {};
+    const warnings = [];
+    for (const runs of [...new Set(TARGETS.map(runsOf))]) {
+        outs[runs] = compileFor(runs, TARGETS.filter((t) => runsOf(t) === runs));
+        warnings.push(...(outs[runs].errors || []).filter((e) => e.severity !== 'error'));
+    }
 
     // name -> { filename: contents }
     const files = {};
     for (const t of TARGETS) {
-        const c = out.contracts[t.file] && out.contracts[t.file][t.name];
+        const o = outs[runsOf(t)];
+        const c = o.contracts[t.file] && o.contracts[t.file][t.name];
         if (!c) throw new Error(`no output for ${t.file}:${t.name}`);
         files[`${t.name}.abi`] = JSON.stringify(c.abi) + '\n';
         if (t.kind === 'full') {
