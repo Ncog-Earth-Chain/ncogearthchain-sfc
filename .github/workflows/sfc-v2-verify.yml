@@ -19,7 +19,7 @@ name: SFC v2 verify
 # variable NODE_REF (a branch, tag or sha; default the node's default branch), or the `node_ref` input of
 # a manual run. A change to the v2 runtime lands in both repositories; until the node side has merged,
 # point NODE_REF (or the manual input) at the node branch that carries the new copies. NODE_REPO_TOKEN
-# (a read-only token) is needed only if the node repository is private.
+# (a read-only token) is REQUIRED: the node repository is private.
 
 on:
   push:
@@ -54,6 +54,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # The node repository is PRIVATE: on 2026-10-25 (push of 693318c) the checkout below failed with
+      # "Not Found", because without NODE_REPO_TOKEN it falls back to the default GITHUB_TOKEN, which reads
+      # only this repository. NODE_REPO_TOKEN is a repository secret holding a fine-grained token with
+      # Contents: read on Ncog-Earth-Chain/ncogearthchain (OPS-02, NEC-48). This step turns a missing or
+      # under-scoped secret into an error that names it.
+      - name: Read access to the node repository
+        env:
+          TOKEN: ${{ secrets.NODE_REPO_TOKEN || github.token }}
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" https://api.github.com/repos/Ncog-Earth-Chain/ncogearthchain)
+          [ "$code" = 200 ] || { echo "::error::cannot read Ncog-Earth-Chain/ncogearthchain (HTTP $code): it is private, so this job needs the repository secret NODE_REPO_TOKEN, a fine-grained token with Contents: read on it"; exit 1; }
       - name: Checkout the node repository (ncogearthchain)
         uses: actions/checkout@v4
         with:
