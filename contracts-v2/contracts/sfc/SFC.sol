@@ -103,6 +103,7 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
     uint8 internal constant P_MAX_SLASHING_REFUND_RATIO = 23;
     uint8 internal constant P_EMISSION_PER_SECOND = 24;
     uint8 internal constant P_LOCKUP_BONUS_MULTIPLIER = 29;
+    uint8 internal constant P_MAX_ACTIVE_VALIDATORS = 30;
 
     // Errors. Custom errors, not strings: EIP-170 leaves the core no room for revert strings.
     error AlreadyExcluded();
@@ -148,6 +149,7 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
     error ValidatorNotActive();
     error ValidatorNotFound();
     error ValidatorNotSlashed();
+    error ValidatorSetFull();
     error ValidatorSlashed();
     error WrongStatus();
     error ZeroAddress();
@@ -274,7 +276,7 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         uint256 rewards
     ) external onlyDriver {
         if (genesisSealed) revert GenesisSealed();
-        if (!_validatorExists(toValidatorID)) revert ValidatorNotFound();
+        _requireValidator(toValidatorID);
         if (lockedStake > stake) revert LockedAboveStake();
         _rawDelegate(delegator, toValidatorID, stake);
         node.incBalance(address(this), stake);
@@ -298,7 +300,7 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
     /// share NOW and routes it (F5, D6); delegations are charged when they exit (withdraw).
     function deactivateValidator(uint256 validatorID, uint256 status) external onlyDriver {
         if (status == OK_STATUS) revert WrongStatus();
-        if (!_validatorExists(validatorID)) revert ValidatorNotFound();
+        _requireValidator(validatorID);
         bool wasCheater = isSlashed(validatorID);
         _setValidatorDeactivated(validatorID, status);
         if (!wasCheater && isSlashed(validatorID)) {
@@ -415,6 +417,7 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         _bindProvenPubkey(validatorID, pubkey, pop);
         _rawCreateValidator(msg.sender, validatorID, pubkey, OK_STATUS, currentEpoch(), block.timestamp, 0, 0);
         _delegate(msg.sender, validatorID, msg.value);
+        _takeSeat();
     }
 
     /// @notice Rotates the caller's validator key, at most once per epoch. A validator in the set gets
@@ -426,8 +429,9 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         if (validatorID == 0) revert ValidatorNotFound();
         if (isSlashed(validatorID)) revert ValidatorSlashed();
         _bindProvenPubkey(validatorID, pubkey, pop);
-        if (lastPubkeyUpdateEpoch[validatorID] >= currentEpoch()) revert OnePubkeyUpdatePerEpoch();
-        lastPubkeyUpdateEpoch[validatorID] = currentEpoch();
+        uint256 epoch = currentEpoch();
+        if (lastPubkeyUpdateEpoch[validatorID] >= epoch) revert OnePubkeyUpdatePerEpoch();
+        lastPubkeyUpdateEpoch[validatorID] = epoch;
         getValidatorPubkey[validatorID] = pubkey;
         emit UpdatedValidatorPubkey(validatorID, pubkey);
         _syncValidator(validatorID, true);
@@ -445,13 +449,15 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         if (currentSealedEpoch < v.deactivatedEpoch) revert TooEarly();
         if (getSelfStake(validatorID) < _c(P_MIN_SELF_STAKE)) revert InsufficientSelfStake();
 
-        _rewardGaps[validatorID].push(RewardGap(v.deactivatedEpoch + 1, currentEpoch(), _rateAt(validatorID, v.deactivatedEpoch)));
+        uint256 left = v.deactivatedEpoch;
+        _rewardGaps[validatorID].push(RewardGap(left + 1, currentEpoch(), _rateAt(validatorID, left)));
         v.status = OK_STATUS;
         v.deactivatedEpoch = 0;
         v.deactivatedTime = 0;
         totalActiveStake += v.receivedStake;
         _checkDelegatedStakeLimit(validatorID);
         _checkConcentration(validatorID);
+        _takeSeat();
         emit ChangedValidatorStatus(validatorID, OK_STATUS);
         _syncValidator(validatorID, true);
     }
@@ -499,7 +505,8 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         if (isSlashed(toValidatorID) && delegator != v.auth) {
             // ceil(amount x ratio x (1 - refund)): rounding up stops a dust split from escaping it
             uint256 u = Decimal.unit();
-            penalty = _ceilDiv(amount * _c(P_DOUBLE_SIGN_DELEGATION_SLASH_RATIO) * (u - slashingRefundRatio[toValidatorID]), u * u);
+            uint256 num = amount * _c(P_DOUBLE_SIGN_DELEGATION_SLASH_RATIO) * (u - slashingRefundRatio[toValidatorID]);
+            penalty = num == 0 ? 0 : (num - 1) / (u * u) + 1;
             if (penalty > amount) {
                 penalty = amount;
             }
@@ -847,14 +854,11 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
 
     // ================================================================ internals: validators and stake
 
-    function _requirePubkey(bytes calldata pubkey) internal pure {
-        if (pubkey.length != PUBKEY_LENGTH || pubkey[0] != PUBKEY_TYPE) revert MalformedPubkey();
-    }
-
     /// @dev Binds a well-formed key to `validatorID` for good (SEC-15b): a key bound to ANY ID before,
-    /// this one included, is refused (PubkeyBound).
+    /// this one included, is refused (PubkeyBound). The shape check is here rather than in a helper of
+    /// its own: it had this one caller, and EIP-170 (CP-07).
     function _bindPubkey(uint256 validatorID, bytes calldata pubkey) private {
-        _requirePubkey(pubkey);
+        if (pubkey.length != PUBKEY_LENGTH || pubkey[0] != PUBKEY_TYPE) revert MalformedPubkey();
         bytes32 h = keccak256(pubkey);
         if (pubkeyBoundTo[h] != 0) revert PubkeyBound();
         pubkeyBoundTo[h] = validatorID;
@@ -905,8 +909,10 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         return addr;
     }
 
-    function _validatorExists(uint256 validatorID) internal view returns (bool) {
-        return getValidator[validatorID].createdTime != 0;
+    /// @dev Reverts unless the validator exists. Every caller wanted the refusal rather than the
+    /// predicate, and one revert site instead of four is what EIP-170 leaves room for (90 B).
+    function _requireValidator(uint256 validatorID) internal view {
+        if (getValidator[validatorID].createdTime == 0) revert ValidatorNotFound();
     }
 
     function _rawCreateValidator(
@@ -942,7 +948,7 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
     /// @dev A stake-increasing action on an active validator: the delegation ratio and the
     /// concentration cap must hold afterwards.
     function _delegate(address delegator, uint256 toValidatorID, uint256 amount) internal {
-        if (!_validatorExists(toValidatorID)) revert ValidatorNotFound();
+        _requireValidator(toValidatorID);
         if (getValidator[toValidatorID].status != OK_STATUS) revert ValidatorNotActive();
         _rawDelegate(delegator, toValidatorID, amount);
         _checkDelegatedStakeLimit(toValidatorID);
@@ -1003,6 +1009,34 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         if (weight * Decimal.unit() > _c(P_MAX_VALIDATOR_WEIGHT_SHARE) * totalActiveStake) revert ConcentrationCapExceeded();
     }
 
+    /// @dev CP-07 (QUAL-01, NEC-192): takes one seat of the governed active-validator bound, or
+    /// refuses. The two callers are the only paths that can raise the active count -- createValidator
+    /// and reactivateValidator -- since every other stake-increasing call needs an OK_STATUS validator,
+    /// which already holds a seat (_delegate). The bound is read from the ConstantsManager at the
+    /// moment it is applied, so the Timelock's bounded, rate-limited setter is the one way to move it.
+    /// LOWERING it below the current set evicts nobody and truncates no stake: this is the only place
+    /// the value is read, and nothing here writes a stake, a lockup or a sealed snapshot.
+    ///
+    /// The count is the length of the set the node was last sent plus the admissions made since, which
+    /// are not in that array yet (SFCStorageV2._seatsTakenIn). Neither half can drift: the array is
+    /// the active set by construction, and the tally is keyed by the epoch it belongs to. An exit
+    /// frees its seat at the next seal rather than at once, which can only refuse for longer, never
+    /// admit past the bound.
+    ///
+    /// Both callers put it LAST, after every check they already had: a bound that is reached is a
+    /// property of the network, not of the call, so it must not take the place of the answer the
+    /// caller would have had anyway -- a malformed key, an unproven or already-bound one, a chain
+    /// whose key back-fill has not finished, too little self-stake, the delegation ratio or the
+    /// concentration cap. Nothing it reverts after has been kept: the whole transaction rolls back.
+    function _takeSeat() private {
+        uint256 epoch = currentEpoch();
+        uint256 taken = _seatsTakenIn[epoch] + 1;
+        if (getEpochSnapshot[epoch].validatorIDs.length + taken > _c(P_MAX_ACTIVE_VALIDATORS)) {
+            revert ValidatorSetFull();
+        }
+        _seatsTakenIn[epoch] = taken;
+    }
+
     function _setValidatorDeactivated(uint256 validatorID, uint256 status) internal {
         Validator storage v = getValidator[validatorID];
         if (v.status == OK_STATUS && status != OK_STATUS) {
@@ -1023,7 +1057,7 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
     /// @dev Tells the node a validator's weight (0 unless active) and, when asked and the weight is
     /// not 0, its pubkey -- in that order (design 2.2 rule 1). Internal: v1 exposed it publicly (F9).
     function _syncValidator(uint256 validatorID, bool syncPubkey) internal {
-        if (!_validatorExists(validatorID)) revert ValidatorNotFound();
+        _requireValidator(validatorID);
         uint256 weight = getValidator[validatorID].receivedStake;
         if (getValidator[validatorID].status != OK_STATUS) {
             weight = 0;
@@ -1138,10 +1172,6 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         return address(consts) == address(0) ? 0 : _c(P_EMISSION_PER_SECOND);
     }
 
-    function _ceilDiv(uint256 a, uint256 b) internal pure returns (uint256) {
-        return a == 0 ? 0 : (a - 1) / b + 1;
-    }
-
     // ================================================================ internals: rewards
 
     function _claimRewards(address delegator, uint256 toValidatorID) internal returns (Rewards memory rewards) {
@@ -1218,15 +1248,6 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
     /// is always the weight the claims will multiply by.
     function _reweighLockup(uint256 validatorID, uint256 removed, uint256 added) internal {
         _lockBonusWeight[validatorID] = _lockBonusWeight[validatorID] + added - removed;
-    }
-
-    /// @dev The validator's stake with the lock bonus folded in: receivedStake plus the bonus on its
-    /// lock-bonus weight (a sum of lockedStake x lockupDuration, so the duration is already in it and
-    /// `_lockBonus(weight, 1)` is the right call). This is the denominator that makes an epoch's
-    /// payout equal its budget: it charges the pool, through the SAME _lockBonus the claims are paid
-    /// by, for every wei of bonus they will take.
-    function _lockWeightedStake(uint256 validatorID) internal view returns (uint256) {
-        return getValidator[validatorID].receivedStake + _lockBonus(_lockBonusWeight[validatorID], 1);
     }
 
     function _sum(Rewards memory a, Rewards memory b) internal pure returns (Rewards memory) {
@@ -1511,7 +1532,12 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
         }
         // the latest stake, not the snapshot's, for the accuracy of the distribution (as v1), with the
         // lock bonus folded into it so the multiplier redistributes this pool (ECO-01b)
-        uint256 receivedStake = _lockWeightedStake(validatorID);
+        // the validator's stake with the lock bonus folded in: receivedStake plus the bonus on its
+        // lock-bonus weight (a sum of lockedStake x lockupDuration, so the duration is already in it
+        // and `_lockBonus(weight, 1)` is the right call). This is the denominator that makes an
+        // epoch's payout equal its budget: it charges the pool, through the SAME _lockBonus the claims
+        // are paid by, for every wei of bonus they will take.
+        uint256 receivedStake = getValidator[validatorID].receivedStake + _lockBonus(_lockBonusWeight[validatorID], 1);
         uint256 rewardPerToken = 0;
         if (receivedStake != 0) {
             rewardPerToken = ((rawReward - commissionRewardFull) * Decimal.unit()) / receivedStake;

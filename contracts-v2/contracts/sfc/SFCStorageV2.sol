@@ -71,6 +71,15 @@ abstract contract SFCStorageV2 {
     // last validator ID whose key it recorded, or KEYS_BOUND once every validator's key is recorded
     // (set by initialize on a chain whose SFC is born "202", where setGenesisValidator records each).
     uint256 internal _keysBoundThrough;
-    // slots 141..185: reserved headroom, used from the front
-    uint256[45] private __gap;
+    // slot 141: CP-07 (NEC-192), epoch -> how many validators were ADMITTED in that epoch
+    // (createValidator, reactivateValidator). The bound is measured against the length of the set the
+    // node was last sent -- getEpochSnapshot[currentEpoch()].validatorIDs, which IS the active set by
+    // construction, not a tally that could drift -- plus this epoch's admissions, which are not in
+    // that array yet. Keyed BY EPOCH so that nothing has to reset it: every epoch starts at 0, a set
+    // sent again after a reverted sealEpoch cannot lose the epoch's admissions, and an SFC installed
+    // by a code op needs no migration, because an untouched slot reads 0 for the current epoch and
+    // the set it is added to is the one the previous SFC already recorded here (SFC._takeSeat).
+    mapping(uint256 => uint256) internal _seatsTakenIn;
+    // slots 142..185: reserved headroom, used from the front
+    uint256[44] private __gap;
 }
