@@ -563,6 +563,38 @@ contract ConstantsManager is Initializable, Ownable {
         _update(Param.MaxActiveValidators, v);
     }
 
+    /**
+     * @notice Gives a value to a parameter APPENDED to the table after this contract was installed on
+     * a chain, and which therefore has no value at all there. The Timelock code operation that
+     * replaces this contract's code must carry one call of this per appended parameter, and it must
+     * land BEFORE anything reads that parameter.
+     *
+     * @dev `NodeDriverAuth.upgradeCode` replaces code over the existing storage, and `initialize` is
+     * an `initializer` that cannot run a second time, so every parameter appended to `Param` after a
+     * chain installed this contract reads 0 there. For a parameter whose hard bound excludes 0 that
+     * zero is not a decision, it is an absence -- and the ordinary setter cannot repair it, because
+     * the rate limit's range from 0 is `[0, minStep]`, which does not reach a hard bound above it.
+     * CP-07's `maxActiveValidators` is the first parameter for which that matters: its hard bound is
+     * [4, 200] and its rate range from 0 is [0, 1], so `allowedRange` is the EMPTY [4, 1], every
+     * `updateMaxActiveValidators` reverts, and the cell would stay 0 until another 72 h code
+     * operation. The SFC reads 0 as "no bound yet" for the same reason (SFC._takeSeat).
+     *
+     * This is a seeding write, not a change, and it is written to be unusable as anything else: it
+     * refuses unless the cell is EMPTY and 0 is OUTSIDE the parameter's hard bound. So it can never
+     * move a value governance chose, and never applies to a parameter for which 0 is a legal setting
+     * (`sustainabilityShare` starts at 0 by decision). It records no history, so the first real
+     * `update*` is rate-limited from the seeded value, exactly as it is from an initial value. A
+     * future appended parameter that takes part in a cross-parameter invariant must add the
+     * `_checkInvariants()` call its own setter would make.
+     */
+    function seedAppendedParameter(Param p, uint256 v) external onlyOwner {
+        require(_values[uint256(p)] == 0, "ConstantsManager: parameter already has a value");
+        (uint256 lo, , ) = _spec(p);
+        require(lo != 0, "ConstantsManager: zero is inside this parameter's hard bound");
+        _setInitial(p, v);
+        emit UpdatedConstant(p, 0, v);
+    }
+
     // ------------------------------------------------------------------ internals
 
     /// @dev Hard bound and minimum step per parameter. The single source of every bound above.

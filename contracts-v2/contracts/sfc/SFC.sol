@@ -1030,11 +1030,24 @@ contract SFC is Initializable, Ownable, SFCStorageV1, SFCStorageV2, ISFCNodeSurf
     /// concentration cap. Nothing it reverts after has been kept: the whole transaction rolls back.
     function _takeSeat() private {
         uint256 epoch = currentEpoch();
-        uint256 taken = _seatsTakenIn[epoch] + 1;
-        if (getEpochSnapshot[epoch].validatorIDs.length + taken > _c(P_MAX_ACTIVE_VALIDATORS)) {
-            revert ValidatorSetFull();
+        uint256 taken = _seatsTakenIn[epoch];
+        uint256 occupied = getEpochSnapshot[epoch].validatorIDs.length + taken;
+        // One seat is about to be taken, so the seats already occupied must be strictly below the
+        // bound. `occupied >= bound` is written as `occupied > bound - 1` so that the subtraction
+        // UNDERFLOWS, deliberately, when the ConstantsManager cell reads 0: an UNSEEDED cell binds
+        // nothing. 0 is outside this parameter's hard bound [4, 200], so it is never a bound
+        // governance chose -- it is the state `upgradeCode` leaves on a chain whose
+        // ConstantsManager.initialize has already run (the storage survives, the initializer cannot
+        // run again), which design section 4 names as the real install path. Refusing on it would
+        // refuse EVERY createValidator and reactivateValidator from the block the SFC code op lands,
+        // and the rate-limited setter cannot repair it (its range from 0 is the empty [4, 1]) --
+        // ConstantsManager.seedAppendedParameter is the one way in, and the code op must carry it.
+        unchecked {
+            if (occupied > _c(P_MAX_ACTIVE_VALIDATORS) - 1) {
+                revert ValidatorSetFull();
+            }
         }
-        _seatsTakenIn[epoch] = taken;
+        _seatsTakenIn[epoch] = taken + 1;
     }
 
     function _setValidatorDeactivated(uint256 validatorID, uint256 status) internal {
