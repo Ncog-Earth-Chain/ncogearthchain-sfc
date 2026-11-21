@@ -969,10 +969,28 @@
  {
   "slot": "141",
   "offset": 0,
+  "label": "_seatsTakenIn",
+  "type": "mapping(uint256 => uint256)",
+  "encoding": "mapping",
+  "bytes": 32,
+  "key": {
+   "type": "uint256",
+   "encoding": "inplace",
+   "bytes": 32
+  },
+  "value": {
+   "type": "uint256",
+   "encoding": "inplace",
+   "bytes": 32
+  }
+ },
+ {
+  "slot": "142",
+  "offset": 0,
   "label": "__gap",
-  "type": "uint256[45]",
+  "type": "uint256[44]",
   "encoding": "inplace",
-  "bytes": 1440,
+  "bytes": 1408,
   "base": {
    "type": "uint256",
    "encoding": "inplace",

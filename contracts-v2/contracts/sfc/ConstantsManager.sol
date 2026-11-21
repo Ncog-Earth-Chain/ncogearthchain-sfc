@@ -57,6 +57,19 @@ import {Decimal} from "../common/Decimal.sol";
  *   tailEmissionRate                1%           [0.25%, 1.5%]          -          DECIDE-07/25 (per year of LIVE supply, once the reserve is empty)
  *   maxApy                          15%          [5%, 30%]              -          DECIDE-13 (the cap while stake is small)
  *   lockupBonusMultiplier           1.5x         [1.0x, 2.0x]           -          DECIDE-13 (redistributes within the budget, never above it)
+ *   maxActiveValidators             200*         [4*, 200]              1          CP-07/NEC-192 (* PROPOSED, owner OPEN)
+ *
+ * CP-07 (NEC-192) appended the last one: the bound on how many validators may be ACTIVE at once. Its
+ * CEILING, 200, is `ncogearthchain.MaxSupportedValidators` -- the only value PERF-03 measured (1.68
+ * ms/event at N=200, 33.7% of one core at the qualified 1 event/s) -- so raising it is a change to
+ * this contract's code, the Timelock's 72 h class, which is the right price for a limit that needs
+ * new consensus CPU, finality, memory and event-bandwidth measurement first. The INITIAL VALUE and
+ * the FLOOR are PROPOSED and AWAIT THE OWNER (design section 8 items 2 and 3): 200 initially, so that
+ * installing the parameter refuses nobody who may register today, and a floor of 4, the genesis set
+ * (DECIDE-14), below which a floor would be indistinguishable from none. The owner can change either
+ * with one line here; neither is a shape the rest of the mechanism depends on. Note the shape rather
+ * than discover it: with the ceiling at the initial value, the rate limit governs the way DOWN and
+ * back, and the SFC refuses admission -- never evicts -- when the bound is below the active set.
  *
  * The slashing figures and the emission rate were appended by SFC v2 core (GOV-01b run 12) so that
  * no economic figure of the SFC is a constant in its code: the figures of design D6 and the
@@ -95,7 +108,9 @@ import {Decimal} from "../common/Decimal.sol";
  *   slots 1..50   Initializable gap (v1-compatible)
  *   slot 51       Ownable._owner
  *   slots 52..101 Ownable gap (v1-compatible)
- *   slots 102..165 _values[64], indexed by Param; new parameters are appended to the enum
+ *   slots 102..165 _values[64], indexed by Param; new parameters are appended to the enum (CP-07's
+ *                 MaxActiveValidators is index 30, slot 132: inside the array already there, so no
+ *                 storage layout moves and a deployed ConstantsManager keeps every slot it has)
  *   slot 166      _history
  * New state goes after `_history`, and new parameters take the next enum index, never a reused one.
  */
@@ -132,7 +147,8 @@ contract ConstantsManager is Initializable, Ownable {
         EmissionGlideDuration, //        26 how long the glide takes to reach it
         TailEmissionRate, //             27 per year of live supply, once the reserve is empty
         MaxApy, //                       28
-        LockupBonusMultiplier //         29
+        LockupBonusMultiplier, //        29
+        MaxActiveValidators //           30 (CP-07: how many validators may be ACTIVE at once)
     }
 
     /// @dev One recorded change: when it happened and the value it replaced.
@@ -174,6 +190,26 @@ contract ConstantsManager is Initializable, Ownable {
     /// change to this contract's code, which is the Timelock's 72 h class (design 4), and it is the
     /// hard upper bound of both glide rates as well (`_spec`).
     uint256 public constant EMISSION_CODE_CEILING = 2.5e16; // 2.5%
+
+    /// @notice CP-07 (NEC-192): the HARD CEILING on the active validator count, the only value
+    /// PERF-03 measured (`ncogearthchain.MaxSupportedValidators`). A constant, not a parameter:
+    /// raising it is a change to this contract's code, the Timelock's 72 h class (design 4), and the
+    /// ticket requires any raised hard limit to be qualified with measured consensus CPU, finality,
+    /// memory and event bandwidth -- a measurement that does not exist above 200.
+    uint256 public constant MAX_ACTIVE_VALIDATORS_CEILING = 200;
+
+    /// @dev CP-07's PROPOSED initial active-validator bound, AWAITING THE OWNER (design section 8
+    /// item 3). The measured ceiling, so that installing the parameter refuses nobody who may
+    /// register today: the bound starts where the qualification limit already is, and governance
+    /// moves it from there.
+    uint256 private constant PROPOSED_MAX_ACTIVE_VALIDATORS = 200;
+
+    /// @dev CP-07's PROPOSED floor for the bound, AWAITING THE OWNER (design section 8 item 2).
+    /// The genesis validator set is 4 (DECIDE-14), so a floor at or below 4 is indistinguishable from
+    /// no floor, and one above the current active count would make the parameter unsettable from the
+    /// moment it is installed. The floor exists so that one parameter operation cannot ossify the set
+    /// at its current size.
+    uint256 private constant PROPOSED_MIN_ACTIVE_VALIDATORS = 4;
 
     uint256[64] private _values;
     mapping(Param => History) private _history;
@@ -218,6 +254,7 @@ contract ConstantsManager is Initializable, Ownable {
         _setInitial(Param.TailEmissionRate, 1 * PERCENT);
         _setInitial(Param.MaxApy, 15 * PERCENT);
         _setInitial(Param.LockupBonusMultiplier, 1.5e18);
+        _setInitial(Param.MaxActiveValidators, PROPOSED_MAX_ACTIVE_VALIDATORS);
         _checkInvariants();
     }
 
@@ -365,6 +402,13 @@ contract ConstantsManager is Initializable, Ownable {
     /// the lock-weighted stake, so the epoch's total payout is the budget at any lock participation.
     function lockupBonusMultiplier() external view returns (uint256) {
         return _values[uint256(Param.LockupBonusMultiplier)];
+    }
+
+    /// @notice CP-07 (NEC-192): how many validators may be ACTIVE at once. SFC v2 reads it at its two
+    /// admission paths -- createValidator and reactivateValidator -- and refuses `ValidatorSetFull`
+    /// when the set is already at it. Lowering it evicts nobody: the SFC reads it nowhere else.
+    function maxActiveValidators() external view returns (uint256) {
+        return _values[uint256(Param.MaxActiveValidators)];
     }
 
     /// @notice Any parameter by identifier.
@@ -515,6 +559,42 @@ contract ConstantsManager is Initializable, Ownable {
         _update(Param.LockupBonusMultiplier, v);
     }
 
+    function updateMaxActiveValidators(uint256 v) external onlyOwner {
+        _update(Param.MaxActiveValidators, v);
+    }
+
+    /**
+     * @notice Gives a value to a parameter APPENDED to the table after this contract was installed on
+     * a chain, and which therefore has no value at all there. The Timelock code operation that
+     * replaces this contract's code must carry one call of this per appended parameter, and it must
+     * land BEFORE anything reads that parameter.
+     *
+     * @dev `NodeDriverAuth.upgradeCode` replaces code over the existing storage, and `initialize` is
+     * an `initializer` that cannot run a second time, so every parameter appended to `Param` after a
+     * chain installed this contract reads 0 there. For a parameter whose hard bound excludes 0 that
+     * zero is not a decision, it is an absence -- and the ordinary setter cannot repair it, because
+     * the rate limit's range from 0 is `[0, minStep]`, which does not reach a hard bound above it.
+     * CP-07's `maxActiveValidators` is the first parameter for which that matters: its hard bound is
+     * [4, 200] and its rate range from 0 is [0, 1], so `allowedRange` is the EMPTY [4, 1], every
+     * `updateMaxActiveValidators` reverts, and the cell would stay 0 until another 72 h code
+     * operation. The SFC reads 0 as "no bound yet" for the same reason (SFC._takeSeat).
+     *
+     * This is a seeding write, not a change, and it is written to be unusable as anything else: it
+     * refuses unless the cell is EMPTY and 0 is OUTSIDE the parameter's hard bound. So it can never
+     * move a value governance chose, and never applies to a parameter for which 0 is a legal setting
+     * (`sustainabilityShare` starts at 0 by decision). It records no history, so the first real
+     * `update*` is rate-limited from the seeded value, exactly as it is from an initial value. A
+     * future appended parameter that takes part in a cross-parameter invariant must add the
+     * `_checkInvariants()` call its own setter would make.
+     */
+    function seedAppendedParameter(Param p, uint256 v) external onlyOwner {
+        require(_values[uint256(p)] == 0, "ConstantsManager: parameter already has a value");
+        (uint256 lo, , ) = _spec(p);
+        require(lo != 0, "ConstantsManager: zero is inside this parameter's hard bound");
+        _setInitial(p, v);
+        emit UpdatedConstant(p, 0, v);
+    }
+
     // ------------------------------------------------------------------ internals
 
     /// @dev Hard bound and minimum step per parameter. The single source of every bound above.
@@ -550,6 +630,12 @@ contract ConstantsManager is Initializable, Ownable {
         if (p == Param.EmissionGlideDuration) return (YEAR, 20 * YEAR, 1 days);
         if (p == Param.TailEmissionRate) return (PERCENT / 4, (3 * PERCENT) / 2, 0);
         if (p == Param.MaxApy) return (5 * PERCENT, 30 * PERCENT, 0);
+        // CP-07: a count, so the minimum step is one validator (20% of a small count rounds to 0 in
+        // integers, as for WithdrawalPeriodEpochs). The ceiling is the measured pin; the floor is
+        // PROPOSED and awaits the owner.
+        if (p == Param.MaxActiveValidators) {
+            return (PROPOSED_MIN_ACTIVE_VALIDATORS, MAX_ACTIVE_VALIDATORS_CEILING, 1);
+        }
         // Param.LockupBonusMultiplier
         return (Decimal.unit(), 2 * Decimal.unit(), 0);
     }
